@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uln_test?schema=public
+      JWT_SECRET: ci-jwt-secret-minimum-32-characters-long
+      SESSION_SECRET: ci-session-secret-minimum-32-chars
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Typecheck shared
+        run: npm run typecheck --workspace=@uln/shared
+
+      - name: Typecheck web
+        run: npm run typecheck --workspace=@uln/web
+
+      - name: Typecheck mobile
+        run: cd apps/mobile && npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build web
+        run: npm run build --workspace=@uln/web
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uln_test?schema=public
+      JWT_SECRET: ci-jwt-secret-minimum-32-characters-long
+      SESSION_SECRET: ci-session-secret-minimum-32-chars
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      CI: true
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: uln_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Run database migrations
+        run: npm run migrate:deploy --workspace=@uln/database
+
+      - name: Seed database
+        run: npm run db:seed
+
+      - name: Build web
+        run: npm run build --workspace=@uln/web
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

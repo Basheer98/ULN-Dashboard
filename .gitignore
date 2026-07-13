@@ -1,0 +1,29 @@
+node_modules/
+.next/
+dist/
+build/
+.expo/
+.turbo/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.tsbuildinfo
+coverage/
+.vercel/
+e2e/.auth/
+playwright-report/
+test-results/
+railway.toml.local
+apps/web/uploads/
+
+# Credentials — never commit
+*-service-account*.json
+*service-account*.json
+google-credentials.json
+urbanlink-*.json
+**/google-play-*.json
+
+# Local Google credentials path (if copied into repo by mistake)
+credentials/

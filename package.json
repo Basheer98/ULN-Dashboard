@@ -1,0 +1,36 @@
+{
+  "name": "uln-dashboard",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@uln/web",
+    "dev:web": "npm run dev --workspace=@uln/web",
+    "dev:mobile": "cd apps/mobile && npm start",
+    "build": "npm run build --workspace=@uln/web",
+    "postinstall": "npm run db:generate",
+    "db:generate": "npm run generate --workspace=@uln/database",
+    "db:migrate": "npm run migrate:dev --workspace=@uln/database",
+    "db:push": "npm run push --workspace=@uln/database",
+    "db:seed": "npm run seed --workspace=@uln/database",
+    "db:reset": "npm run reset --workspace=@uln/database",
+    "db:studio": "npm run studio --workspace=@uln/database",
+    "test": "npm run test --workspace=@uln/shared",
+    "test:finance": "npm run test --workspace=@uln/shared",
+    "typecheck": "npm run typecheck --workspace=@uln/shared && npm run typecheck --workspace=@uln/web && cd apps/mobile && npm run typecheck",
+    "check": "npm run db:generate && npm run typecheck && npm test && npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "mobile:build:ios": "cd apps/mobile && eas build --platform ios --profile production",
+    "mobile:build:android": "cd apps/mobile && eas build --platform android --profile production"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+preDeployCommand = "npx prisma migrate deploy --schema=packages/database/prisma/schema.prisma"
+healthcheckPath = "/api/health"
+restartPolicyType = "on_failure"
