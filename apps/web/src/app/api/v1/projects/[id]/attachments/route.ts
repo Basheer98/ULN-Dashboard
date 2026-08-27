@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk } from "@/lib/api";
+import { assertCanAccessProjectFiles, requireAuthUser } from "@/lib/finance-auth";
 import { saveFile } from "@/lib/storage";
 import { serializeProject } from "@/lib/projects";
 
@@ -10,8 +11,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireUser(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { id: projectId } = await params;
+
+    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!project) return jsonError("Project not found", 404);
+    await assertCanAccessProjectFiles(user, projectId);
+
     const attachments = await prisma.attachment.findMany({
       where: { projectId },
       orderBy: { createdAt: "desc" },
@@ -27,11 +33,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requireUser(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { id: projectId } = await params;
 
     const project = await prisma.project.findUnique({ where: { id: projectId } });
     if (!project) return jsonError("Project not found", 404);
+    await assertCanAccessProjectFiles(user, projectId);
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

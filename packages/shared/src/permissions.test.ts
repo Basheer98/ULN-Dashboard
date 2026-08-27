@@ -42,4 +42,10 @@ describe("role permissions consistency", () => {
   it("accountant can export reports", () => {
     expect(hasPermission("accountant", "reports:export")).toBe(true);
   });
+
+  it("fielder has self expense access but not office finance:read", () => {
+    expect(hasPermission("fielder", "expense:self:read")).toBe(true);
+    expect(hasPermission("fielder", "finance:read")).toBe(false);
+    expect(hasPermission("fielder", "finance:admin")).toBe(false);
+  });
 });

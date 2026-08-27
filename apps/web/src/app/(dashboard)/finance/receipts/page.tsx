@@ -1,5 +1,6 @@
 import { StatusBadge } from "@/components/layout";
 import { FinanceHeader } from "@/components/finance/finance-nav";
+import { ReceiptVerifyActions } from "@/components/finance/receipt-actions";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { fielderFolderLabel } from "@/lib/receipt-naming";
@@ -11,9 +12,22 @@ function receiptFileUrl(storedFileName: string) {
     .join("/")}`;
 }
 
-export default async function ReceiptsPage() {
+export default async function ReceiptsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const params = await searchParams;
+  const statusFilter =
+    params.status && ["pending", "verified", "rejected"].includes(params.status)
+      ? (params.status as "pending" | "verified" | "rejected")
+      : undefined;
+
   const receipts = await prisma.receipt.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      ...(statusFilter ? { verificationStatus: statusFilter } : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       transaction: {
@@ -31,12 +45,16 @@ export default async function ReceiptsPage() {
     },
   });
 
+  const pendingCount = statusFilter
+    ? 0
+    : await prisma.receipt.count({
+        where: { deletedAt: null, verificationStatus: "pending" },
+      });
+
   const grouped = new Map<string, typeof receipts>();
   for (const receipt of receipts) {
     const fielder = receipt.transaction?.fielder;
-    const key = fielder
-      ? `fielder-${fielder.id}`
-      : "company";
+    const key = fielder ? `fielder-${fielder.id}` : "company";
     const label = fielderFolderLabel(fielder?.firstName, fielder?.lastName, fielder?.id);
     const groupKey = `${key}::${label}`;
     if (!grouped.has(groupKey)) grouped.set(groupKey, []);
@@ -50,9 +68,36 @@ export default async function ReceiptsPage() {
         subtitle="Organized by fielder folder with readable receipt names"
       />
       <main className="page-main space-y-6">
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link
+            href="/finance/receipts"
+            className={!statusFilter ? "btn-primary text-xs" : "btn-ghost text-xs"}
+          >
+            All
+          </Link>
+          <Link
+            href="/finance/receipts?status=pending"
+            className={statusFilter === "pending" ? "btn-primary text-xs" : "btn-ghost text-xs"}
+          >
+            Pending{pendingCount > 0 ? ` (${pendingCount})` : ""}
+          </Link>
+          <Link
+            href="/finance/receipts?status=verified"
+            className={statusFilter === "verified" ? "btn-primary text-xs" : "btn-ghost text-xs"}
+          >
+            Verified
+          </Link>
+          <Link
+            href="/finance/receipts?status=rejected"
+            className={statusFilter === "rejected" ? "btn-primary text-xs" : "btn-ghost text-xs"}
+          >
+            Rejected
+          </Link>
+        </div>
+
         {receipts.length === 0 ? (
           <div className="card text-center text-sm text-muted-foreground">
-            No receipts uploaded yet.
+            No receipts{statusFilter ? ` with status "${statusFilter}"` : " uploaded yet"}.
           </div>
         ) : (
           Array.from(grouped.entries()).map(([groupKey, items]) => {
@@ -81,6 +126,7 @@ export default async function ReceiptsPage() {
                         <th>Status</th>
                         <th>Date</th>
                         <th></th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -105,7 +151,9 @@ export default async function ReceiptsPage() {
                               "Unlinked"
                             )}
                           </td>
-                          <td><StatusBadge status={r.verificationStatus} /></td>
+                          <td>
+                            <StatusBadge status={r.verificationStatus} />
+                          </td>
                           <td>
                             {(r.transaction?.transactionDate ?? r.createdAt).toLocaleDateString()}
                           </td>
@@ -118,6 +166,9 @@ export default async function ReceiptsPage() {
                             >
                               View
                             </a>
+                          </td>
+                          <td>
+                            <ReceiptVerifyActions receiptId={r.id} status={r.verificationStatus} />
                           </td>
                         </tr>
                       ))}

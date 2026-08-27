@@ -11,7 +11,7 @@ import {
 } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
 import { serializeTransaction, transactionInclude } from "@/lib/finance-transactions";
-import { createExpenseTransaction } from "@/lib/finance-expense";
+import { prepareExpenseCreate } from "@/lib/expense-create";
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,10 +73,21 @@ export async function POST(request: NextRequest) {
       requireFinanceWrite(user);
     }
 
-    const expense = await createExpenseTransaction(parsed.data, user, {
-      forceFielderId: isFielder ? user.fielderId! : undefined,
-      defaultStatus: isFielder ? "submitted" : parsed.data.expenseStatus ?? "draft",
-    });
+    const expenseStatus = isFielder ? "submitted" : parsed.data.expenseStatus ?? "draft";
+    const result = await prepareExpenseCreate(
+      { ...parsed.data, expenseStatus },
+      user,
+      {
+        forceFielderId: isFielder ? user.fielderId! : undefined,
+        defaultStatus: expenseStatus,
+      }
+    );
+
+    if (!result.ok) {
+      return jsonError(result.error, 400);
+    }
+
+    const expense = result.expense;
 
     await logFinanceAudit("created", "expense", expense.id, { user, request }, undefined, expense);
 

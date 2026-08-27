@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -28,8 +28,35 @@ interface Assignment {
   project: { id: string; projectNumber: string; title: string };
 }
 
+interface DuplicateMatch {
+  id: string;
+  transactionNumber: string;
+  amount: number;
+  transactionDate: string;
+  description: string | null;
+  confidence: "exact" | "likely";
+}
+
+interface ScanResponse {
+  receipt: { id: string };
+  ocr: {
+    amount: number | null;
+    transactionDate: string | null;
+    vendorName: string | null;
+    ok?: boolean;
+    error?: string | null;
+  };
+  ocrOk?: boolean;
+  ocrError?: string | null;
+  suggestions?: {
+    categorySuggestion?: { categoryId: string | null; vendorId: string | null };
+    duplicates?: DuplicateMatch[];
+  };
+}
+
 export default function NewExpenseScreen() {
   const [amount, setAmount] = useState("");
+  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [businessPurpose, setBusinessPurpose] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -39,8 +66,47 @@ export default function NewExpenseScreen() {
   const [projects, setProjects] = useState<Assignment[]>([]);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [receiptName, setReceiptName] = useState<string | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
+  const [receiptRequiredAbove, setReceiptRequiredAbove] = useState(25);
   const [submitting, setSubmitting] = useState(false);
   const [isOffice, setIsOffice] = useState(false);
+
+  const refreshSuggestions = useCallback(
+    async (token: string, nextAmount: string, nextDate: string, nextDescription: string) => {
+      const parsedAmount = parseFloat(nextAmount);
+      if (!parsedAmount || parsedAmount <= 0) {
+        setDuplicates([]);
+        return;
+      }
+      try {
+        const data = await apiRequest<{
+          duplicates: DuplicateMatch[];
+          categorySuggestion?: { categoryId: string | null };
+          policy?: { receiptRequiredAbove: number };
+        }>("/finance/expenses/suggest", {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            amount: parsedAmount,
+            transactionDate: nextDate,
+            description: nextDescription || undefined,
+          }),
+        });
+        setDuplicates(data.duplicates ?? []);
+        if (data.policy?.receiptRequiredAbove) {
+          setReceiptRequiredAbove(Number(data.policy.receiptRequiredAbove));
+        }
+        if (data.categorySuggestion?.categoryId && !categoryId) {
+          setCategoryId(data.categorySuggestion.categoryId);
+        }
+      } catch {
+        /* suggestions are optional */
+      }
+    },
+    [categoryId]
+  );
 
   useEffect(() => {
     (async () => {
@@ -70,10 +136,68 @@ export default function NewExpenseScreen() {
             : (projectData as Assignment[])
         );
       } catch {
-        /* categories may require admin - fielders use defaults */
+        /* categories may fail silently on older builds */
       }
     })();
   }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      timer = setTimeout(() => {
+        void refreshSuggestions(token, amount, transactionDate, description);
+      }, 500);
+    })();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [amount, transactionDate, description, refreshSuggestions]);
+
+  async function scanReceipt(uri: string, name: string) {
+    const token = await getToken();
+    if (!token) return;
+
+    setScanning(true);
+    try {
+      const form = new FormData();
+      form.append("file", {
+        uri,
+        name,
+        type: "image/jpeg",
+      } as unknown as Blob);
+      if (projectId) form.append("projectId", projectId);
+
+      const response = await fetch(`${API_URL}/finance/receipts/scan`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = (await response.json()) as ScanResponse & { error?: string };
+      if (!response.ok) throw new Error(data.error || "Receipt scan failed");
+
+      setReceiptId(data.receipt.id);
+      if (data.ocr.amount) setAmount(String(data.ocr.amount));
+      if (data.ocr.transactionDate) setTransactionDate(data.ocr.transactionDate);
+      if (data.ocr.vendorName) setDescription(data.ocr.vendorName);
+      if (data.suggestions?.categorySuggestion?.categoryId) {
+        setCategoryId(data.suggestions.categorySuggestion.categoryId);
+      }
+      if (data.suggestions?.duplicates) {
+        setDuplicates(data.suggestions.duplicates);
+      }
+
+      const ocrError = data.ocrError || data.ocr?.error;
+      if (ocrError) {
+        Alert.alert("OCR incomplete", ocrError);
+      }
+    } catch (e) {
+      Alert.alert("Scan issue", e instanceof Error ? e.message : "Could not scan receipt");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   async function pickReceipt() {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -81,8 +205,11 @@ export default function NewExpenseScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setReceiptUri(result.assets[0].uri);
-      setReceiptName(result.assets[0].fileName ?? "receipt.jpg");
+      const uri = result.assets[0].uri;
+      const name = result.assets[0].fileName ?? "receipt.jpg";
+      setReceiptUri(uri);
+      setReceiptName(name);
+      await scanReceipt(uri, name);
     }
   }
 
@@ -94,12 +221,15 @@ export default function NewExpenseScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
-      setReceiptUri(result.assets[0].uri);
-      setReceiptName(result.assets[0].fileName ?? "receipt.jpg");
+      const uri = result.assets[0].uri;
+      const name = result.assets[0].fileName ?? "receipt.jpg";
+      setReceiptUri(uri);
+      setReceiptName(name);
+      await scanReceipt(uri, name);
     }
   }
 
-  async function handleSubmit() {
+  async function submitExpense(acknowledgeDuplicate = false) {
     const parsedAmount = parseFloat(amount);
     if (!parsedAmount || parsedAmount <= 0) {
       Alert.alert("Invalid amount", "Enter a valid expense amount.");
@@ -107,6 +237,13 @@ export default function NewExpenseScreen() {
     }
     if (!description.trim()) {
       Alert.alert("Description required", "Please describe the expense.");
+      return;
+    }
+    if (parsedAmount >= receiptRequiredAbove && !receiptId && !receiptUri) {
+      Alert.alert(
+        "Receipt required",
+        `Expenses of $${receiptRequiredAbove.toFixed(2)} or more require a receipt photo.`
+      );
       return;
     }
 
@@ -118,58 +255,85 @@ export default function NewExpenseScreen() {
     }
 
     try {
-      const expense = await apiRequest<{ id: string }>(
-        isOffice ? "/finance/expenses" : "/finance/expenses/mine",
-        {
-        method: "POST",
-        token,
-        body: JSON.stringify({
-          transactionDate: new Date().toISOString().slice(0, 10),
-          amount: parsedAmount,
-          description: description.trim(),
-          businessPurpose: businessPurpose.trim() || undefined,
-          categoryId,
-          projectId,
-          paidBy: isOffice && !isReimbursable ? "company" : "employee",
-          isReimbursable,
-          expenseStatus: isOffice ? "approved" : undefined,
-        }),
-      });
-
-      if (receiptUri) {
+      let activeReceiptId = receiptId;
+      if (!activeReceiptId && receiptUri) {
         const form = new FormData();
-        form.append("transactionId", expense.id);
         form.append("file", {
           uri: receiptUri,
           name: receiptName ?? "receipt.jpg",
           type: "image/jpeg",
         } as unknown as Blob);
+        if (projectId) form.append("projectId", projectId);
 
-        const receiptResponse = await fetch(`${API_URL}/finance/receipts`, {
+        const scanResponse = await fetch(`${API_URL}/finance/receipts/scan`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: form,
         });
-        if (!receiptResponse.ok) {
-          const receiptError = await receiptResponse.json().catch(() => ({}));
-          throw new Error(receiptError.error || "Expense saved, but receipt upload failed");
+        const scanData = (await scanResponse.json()) as ScanResponse & { error?: string };
+        if (!scanResponse.ok) {
+          throw new Error(scanData.error || "Receipt upload failed");
         }
+        activeReceiptId = scanData.receipt.id;
+        setReceiptId(activeReceiptId);
       }
+
+      await apiRequest<{ id: string }>(
+        isOffice ? "/finance/expenses" : "/finance/expenses/mine",
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            transactionDate,
+            amount: parsedAmount,
+            description: description.trim(),
+            businessPurpose: businessPurpose.trim() || undefined,
+            categoryId,
+            projectId,
+            paidBy: isOffice && !isReimbursable ? "company" : "employee",
+            isReimbursable,
+            expenseStatus: isOffice ? "approved" : undefined,
+            receiptId: activeReceiptId,
+            acknowledgeDuplicate: acknowledgeDuplicate || undefined,
+          }),
+        }
+      );
 
       Alert.alert(
         isOffice ? "Expense saved" : "Submitted",
         isOffice
           ? "Company spending and receipt were added to finance."
           : "Your expense has been submitted for review.",
-        [
-        { text: "OK", onPress: () => router.back() },
-        ]
+        [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Failed to submit expense");
+      const message = e instanceof Error ? e.message : "Failed to submit expense";
+      if (message.toLowerCase().includes("duplicate") && !acknowledgeDuplicate) {
+        Alert.alert("Possible duplicate", message, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Submit anyway", onPress: () => void submitExpense(true) },
+        ]);
+      } else {
+        Alert.alert("Error", message);
+      }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSubmit() {
+    if (duplicates.length > 0) {
+      Alert.alert(
+        "Possible duplicate",
+        `Similar expense${duplicates.length > 1 ? "s" : ""} found (${duplicates[0]?.transactionNumber}). Submit anyway?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Submit", onPress: () => void submitExpense(true) },
+        ]
+      );
+      return;
+    }
+    void submitExpense(false);
   }
 
   return (
@@ -182,6 +346,16 @@ export default function NewExpenseScreen() {
         keyboardType="decimal-pad"
         placeholder="0.00"
         placeholderTextColor={colors.mutedForeground}
+      />
+
+      <Text style={styles.label}>Date</Text>
+      <TextInput
+        style={styles.input}
+        value={transactionDate}
+        onChangeText={setTransactionDate}
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor={colors.mutedForeground}
+        autoCapitalize="none"
       />
 
       <Text style={styles.label}>Description</Text>
@@ -274,23 +448,45 @@ export default function NewExpenseScreen() {
         />
       </View>
 
+      {duplicates.length > 0 && (
+        <View style={styles.warningBox}>
+          <Text style={styles.warningTitle}>Possible duplicate</Text>
+          {duplicates.map((dup) => (
+            <Text key={dup.id} style={styles.warningText}>
+              {dup.transactionNumber} — ${dup.amount.toFixed(2)} on {dup.transactionDate}
+            </Text>
+          ))}
+        </View>
+      )}
+
       <Text style={styles.label}>Receipt</Text>
+      {parseFloat(amount) >= receiptRequiredAbove && !receiptUri && (
+        <Text style={styles.policyHint}>
+          Receipt required for amounts ≥ ${receiptRequiredAbove.toFixed(2)}
+        </Text>
+      )}
       <View style={styles.receiptRow}>
-        <TouchableOpacity style={styles.receiptBtn} onPress={takePhoto}>
+        <TouchableOpacity style={styles.receiptBtn} onPress={takePhoto} disabled={scanning}>
           <Text style={styles.receiptBtnText}>📷 Take Photo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.receiptBtn} onPress={pickReceipt}>
+        <TouchableOpacity style={styles.receiptBtn} onPress={pickReceipt} disabled={scanning}>
           <Text style={styles.receiptBtnText}>🖼 Choose Photo</Text>
         </TouchableOpacity>
       </View>
+      {scanning && (
+        <View style={styles.scanningRow}>
+          <ActivityIndicator color={colors.accent} size="small" />
+          <Text style={styles.scanningText}>Scanning receipt…</Text>
+        </View>
+      )}
       {receiptUri && (
         <Image source={{ uri: receiptUri }} style={styles.preview} resizeMode="cover" />
       )}
 
       <TouchableOpacity
-        style={[styles.submitBtn, submitting && styles.submitDisabled]}
+        style={[styles.submitBtn, (submitting || scanning) && styles.submitDisabled]}
         onPress={handleSubmit}
-        disabled={submitting}
+        disabled={submitting || scanning}
       >
         {submitting ? (
           <ActivityIndicator color="#fff" />
@@ -346,6 +542,30 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     flex: 1,
   },
+  warningBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: layout.borderRadiusSm,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    backgroundColor: "rgba(234, 179, 8, 0.1)",
+  },
+  warningTitle: {
+    fontFamily: fonts.semibold,
+    color: colors.warning,
+    marginBottom: 4,
+  },
+  warningText: {
+    fontFamily: fonts.regular,
+    color: colors.muted,
+    fontSize: 13,
+  },
+  policyHint: {
+    fontFamily: fonts.medium,
+    color: colors.warning,
+    fontSize: 12,
+    marginBottom: 6,
+  },
   receiptRow: { flexDirection: "row", gap: 10, marginTop: 4 },
   receiptBtn: {
     flex: 1,
@@ -358,7 +578,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  receiptBtnText: { fontFamily: fonts.medium, color: colors.foreground, fontSize: 14, lineHeight: 18, textAlign: "center" },
+  receiptBtnText: {
+    fontFamily: fonts.medium,
+    color: colors.foreground,
+    fontSize: 14,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  scanningRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  scanningText: {
+    fontFamily: fonts.medium,
+    color: colors.muted,
+    fontSize: 13,
+  },
   preview: { width: "100%", height: 180, borderRadius: layout.borderRadiusSm, marginTop: 12 },
   submitBtn: {
     backgroundColor: colors.accent,

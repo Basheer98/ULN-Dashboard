@@ -1,14 +1,22 @@
 import { NextRequest } from "next/server";
-import { expenseCategorySchema } from "@uln/shared";
+import { expenseCategorySchema, hasPermission } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
-import { requireFinanceRead, requireFinanceWrite } from "@/lib/finance-auth";
+import { requireFinanceWrite } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
 
 export async function GET(request: NextRequest) {
   try {
-    requireFinanceRead(await getRequestUser(request));
+    const user = await getRequestUser(request);
+    if (!user) return jsonError("Unauthorized", 401);
+
+    const canRead =
+      hasPermission(user.role, "finance:read") ||
+      hasPermission(user.role, "finance:admin") ||
+      hasPermission(user.role, "expense:self:create");
+    if (!canRead) return jsonError("Forbidden", 403);
+
     const includeInactive = request.nextUrl.searchParams.get("includeInactive") === "true";
 
     const categories = await prisma.expenseCategory.findMany({

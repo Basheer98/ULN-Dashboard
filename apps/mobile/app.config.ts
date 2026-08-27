@@ -24,6 +24,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         "ULN Field uses the camera to photograph expense receipts in the field.",
       NSPhotoLibraryUsageDescription:
         "ULN Field accesses your photo library so you can attach receipt images to expenses.",
+      NSFaceIDUsageDescription:
+        "ULN Field uses Face ID so fielders and office staff can sign in without typing a password.",
       ITSAppUsesNonExemptEncryption: false,
     },
   },
@@ -38,11 +40,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.CAMERA",
       "android.permission.READ_MEDIA_IMAGES",
       "android.permission.POST_NOTIFICATIONS",
+      "android.permission.USE_BIOMETRIC",
+      "android.permission.USE_FINGERPRINT",
     ],
   },
   plugins: [
     "expo-router",
     "expo-secure-store",
+    [
+      "expo-local-authentication",
+      {
+        faceIDPermission:
+          "ULN Field uses Face ID so fielders and office staff can sign in without typing a password.",
+      },
+    ],
     [
       "expo-notifications",
       {

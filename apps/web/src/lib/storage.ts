@@ -39,6 +39,20 @@ function normalizeKey(key: string): string {
   return key.replace(/\\/g, "/");
 }
 
+/** Resolve a storage key under UPLOAD_DIR; rejects path traversal. */
+function resolveUploadPath(fileKey: string): string {
+  const normalized = normalizeKey(fileKey);
+  if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..")) {
+    throw new Error("Invalid file key");
+  }
+  const fullPath = path.resolve(UPLOAD_DIR, normalized);
+  const root = path.resolve(UPLOAD_DIR) + path.sep;
+  if (fullPath !== path.resolve(UPLOAD_DIR) && !fullPath.startsWith(root)) {
+    throw new Error("Invalid file key");
+  }
+  return fullPath;
+}
+
 function fallbackKey(fileName: string): string {
   const ext = path.extname(fileName);
   return `${crypto.randomUUID()}${ext}`;
@@ -52,7 +66,7 @@ class LocalStorageProvider implements StorageProvider {
     options?: StorageSaveOptions
   ): Promise<StorageResult> {
     const fileKey = normalizeKey(options?.relativePath ?? fallbackKey(fileName));
-    const fullPath = path.join(UPLOAD_DIR, fileKey);
+    const fullPath = resolveUploadPath(fileKey);
     await ensureDir(path.dirname(fullPath));
     await fs.writeFile(fullPath, buffer);
     return {
@@ -64,7 +78,7 @@ class LocalStorageProvider implements StorageProvider {
 
   async read(fileKey: string): Promise<Buffer | null> {
     try {
-      return await fs.readFile(path.join(UPLOAD_DIR, normalizeKey(fileKey)));
+      return await fs.readFile(resolveUploadPath(fileKey));
     } catch {
       return null;
     }
@@ -130,15 +144,20 @@ class GoogleDriveStorageProvider implements StorageProvider {
     return folderId;
   }
 
-  private async resolveReceiptParents(relativePath?: string): Promise<string | undefined> {
+  private async resolveDriveParents(relativePath?: string): Promise<string | undefined> {
     const rootFolderId = process.env.GOOGLE_DRIVE_RECEIPTS_FOLDER_ID;
     if (!relativePath) return rootFolderId;
 
     const parts = normalizeKey(relativePath).split("/").filter(Boolean);
-    if (parts[0] !== "receipts") return rootFolderId;
+    if (parts[0] !== "receipts" && parts[0] !== "mileage") return rootFolderId;
 
     let parentId = rootFolderId;
-    for (const segment of parts.slice(1, -1)) {
+    // Receipts: skip the "receipts" prefix so existing Drive layout stays the same.
+    // Mileage: include "mileage" so a Mileage folder is created automatically under the root.
+    const folderSegments =
+      parts[0] === "receipts" ? parts.slice(1, -1) : parts.slice(0, -1);
+
+    for (const segment of folderSegments) {
       parentId = await this.getOrCreateFolder(parentId, segment);
     }
     return parentId;
@@ -153,7 +172,7 @@ class GoogleDriveStorageProvider implements StorageProvider {
     const drive = await this.getDrive();
     const relativePath = normalizeKey(options?.relativePath ?? fallbackKey(fileName));
     const driveFileName = options?.displayName ?? path.basename(relativePath);
-    const parents = await this.resolveReceiptParents(relativePath);
+    const parents = await this.resolveDriveParents(relativePath);
 
     const res = await drive.files.create({
       requestBody: {

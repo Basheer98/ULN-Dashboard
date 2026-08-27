@@ -5,6 +5,7 @@ export const FINANCE_SETTING_KEYS = {
   defaultCurrency: "default_currency",
   fiscalYearStart: "fiscal_year_start",
   receiptRequiredAbove: "receipt_required_above",
+  expenseReviewAbove: "expense_review_above",
   companyName: "company_name",
 } as const;
 
@@ -13,6 +14,7 @@ export const DEFAULT_FINANCE_SETTINGS: Record<string, string> = {
   [FINANCE_SETTING_KEYS.defaultCurrency]: "USD",
   [FINANCE_SETTING_KEYS.fiscalYearStart]: "01-01",
   [FINANCE_SETTING_KEYS.receiptRequiredAbove]: "25",
+  [FINANCE_SETTING_KEYS.expenseReviewAbove]: "200",
   [FINANCE_SETTING_KEYS.companyName]: "Urbanlink Networks LLC",
 };
 
@@ -95,6 +97,8 @@ export const expenseSchema = z.object({
       })
     )
     .optional(),
+  receiptId: z.string().optional().nullable(),
+  acknowledgeDuplicate: z.boolean().optional(),
 });
 
 export const incomeSchema = z.object({
@@ -134,15 +138,20 @@ export const mileageSchema = z.object({
   vehicleId: z.string().optional().nullable(),
   startLocation: z.string().optional(),
   destination: z.string().optional(),
-  startOdometer: z.coerce.number().optional().nullable(),
-  endOdometer: z.coerce.number().optional().nullable(),
+  startOdometer: z.coerce.number().min(0, "Start odometer is required"),
+  endOdometer: z.coerce.number().min(0, "End odometer is required"),
+  /** Ignored on create — miles are always computed from odometer. */
   totalMiles: z.coerce.number().positive().optional(),
   businessPurpose: z.string().optional(),
   projectId: z.string().optional().nullable(),
   tripId: z.string().optional().nullable(),
   isReimbursable: z.boolean().optional(),
   notes: z.string().optional(),
+  startPhotoId: z.string().min(1, "Start odometer photo is required"),
+  endPhotoId: z.string().min(1, "End odometer photo is required"),
 });
+
+export const mileagePhotoKindSchema = z.enum(["start_odometer", "end_odometer"]);
 
 export const tripSchema = z.object({
   name: z.string().min(1),

@@ -4,7 +4,6 @@ import {
   mileageSchema,
   calculateMileageReimbursement,
   calculateMilesFromOdometer,
-  toNumber,
   hasPermission,
 } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
@@ -12,30 +11,12 @@ import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
 import {
   requireFinanceRead,
-  requireFinanceWrite,
   requireFielderSelf,
 } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
 import { getMileageRate } from "@/lib/finance-settings";
 import { notifyOfficeMileageSubmitted } from "@/lib/notifications";
-
-function serializeMileage(entry: {
-  totalMiles: unknown;
-  startOdometer: unknown;
-  endOdometer: unknown;
-  mileageRate: unknown;
-  reimbursement: unknown;
-  [key: string]: unknown;
-}) {
-  return {
-    ...entry,
-    totalMiles: toNumber(entry.totalMiles),
-    startOdometer: entry.startOdometer != null ? toNumber(entry.startOdometer) : null,
-    endOdometer: entry.endOdometer != null ? toNumber(entry.endOdometer) : null,
-    mileageRate: toNumber(entry.mileageRate),
-    reimbursement: toNumber(entry.reimbursement),
-  };
-}
+import { mileagePhotoInclude, serializeMileage } from "@/lib/mileage";
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,7 +42,7 @@ export async function GET(request: NextRequest) {
     const entries = await prisma.mileageEntry.findMany({
       where,
       orderBy: { date: "desc" },
-      include: { driver: true, vehicle: true, trip: true },
+      include: { driver: true, vehicle: true, trip: true, ...mileagePhotoInclude },
     });
 
     return jsonOk(entries.map(serializeMileage));
@@ -83,6 +64,7 @@ export async function POST(request: NextRequest) {
     if (isFielder && !hasPermission(user.role, "mileage:self:create")) {
       return jsonError("Forbidden", 403);
     }
+    if (isFielder) requireFielderSelf(user);
 
     const body = await request.json();
     const parsed = mileageSchema.safeParse(body);
@@ -90,16 +72,47 @@ export async function POST(request: NextRequest) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
     }
 
-    let totalMiles = parsed.data.totalMiles;
-    if (
-      totalMiles == null &&
-      parsed.data.startOdometer != null &&
-      parsed.data.endOdometer != null
-    ) {
-      totalMiles = calculateMilesFromOdometer(parsed.data.startOdometer, parsed.data.endOdometer);
+    if (parsed.data.endOdometer <= parsed.data.startOdometer) {
+      return jsonError("End odometer must be greater than start odometer", 400);
     }
-    if (!totalMiles || totalMiles <= 0) {
-      return jsonError("Total miles required (or provide odometer readings)", 400);
+
+    let totalMiles: number;
+    try {
+      totalMiles = calculateMilesFromOdometer(parsed.data.startOdometer, parsed.data.endOdometer);
+    } catch (error) {
+      return jsonError(error instanceof Error ? error.message : "Invalid odometer readings", 400);
+    }
+
+    const [startPhoto, endPhoto] = await Promise.all([
+      prisma.mileagePhoto.findFirst({
+        where: {
+          id: parsed.data.startPhotoId,
+          kind: "start_odometer",
+          deletedAt: null,
+          mileageEntryId: null,
+        },
+      }),
+      prisma.mileagePhoto.findFirst({
+        where: {
+          id: parsed.data.endPhotoId,
+          kind: "end_odometer",
+          deletedAt: null,
+          mileageEntryId: null,
+        },
+      }),
+    ]);
+
+    if (!startPhoto) return jsonError("Start odometer photo not found or already used", 400);
+    if (!endPhoto) return jsonError("End odometer photo not found or already used", 400);
+
+    if (user.role === "fielder") {
+      if (startPhoto.uploadedById !== user.id || endPhoto.uploadedById !== user.id) {
+        return jsonError("Odometer photos must be uploaded by you", 403);
+      }
+    }
+
+    if (parsed.data.startPhotoId === parsed.data.endPhotoId) {
+      return jsonError("Start and end odometer photos must be different images", 400);
     }
 
     const rate = await getMileageRate();
@@ -107,27 +120,38 @@ export async function POST(request: NextRequest) {
     const driverId = isFielder ? user.fielderId! : (body.driverId as string | undefined);
     if (!driverId) return jsonError("driverId required", 400);
 
-    const entry = await prisma.mileageEntry.create({
-      data: {
-        date: new Date(parsed.data.date),
-        driverId,
-        vehicleId: parsed.data.vehicleId ?? null,
-        startLocation: parsed.data.startLocation,
-        destination: parsed.data.destination,
-        startOdometer: parsed.data.startOdometer ?? null,
-        endOdometer: parsed.data.endOdometer ?? null,
-        totalMiles,
-        businessPurpose: parsed.data.businessPurpose,
-        projectId: parsed.data.projectId ?? null,
-        tripId: parsed.data.tripId ?? null,
-        isReimbursable: parsed.data.isReimbursable ?? true,
-        mileageRate: rate,
-        reimbursement,
-        status: "submitted",
-        notes: parsed.data.notes,
-        submittedById: user.id,
-      },
-      include: { driver: true, vehicle: true, trip: true },
+    const entry = await prisma.$transaction(async (tx) => {
+      const created = await tx.mileageEntry.create({
+        data: {
+          date: new Date(parsed.data.date),
+          driverId,
+          vehicleId: parsed.data.vehicleId ?? null,
+          startLocation: parsed.data.startLocation,
+          destination: parsed.data.destination,
+          startOdometer: parsed.data.startOdometer,
+          endOdometer: parsed.data.endOdometer,
+          totalMiles,
+          businessPurpose: parsed.data.businessPurpose,
+          projectId: parsed.data.projectId ?? null,
+          tripId: parsed.data.tripId ?? null,
+          isReimbursable: parsed.data.isReimbursable ?? true,
+          mileageRate: rate,
+          reimbursement,
+          status: "submitted",
+          notes: parsed.data.notes,
+          submittedById: user.id,
+        },
+      });
+
+      await tx.mileagePhoto.updateMany({
+        where: { id: { in: [startPhoto.id, endPhoto.id] } },
+        data: { mileageEntryId: created.id },
+      });
+
+      return tx.mileageEntry.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { driver: true, vehicle: true, trip: true, ...mileagePhotoInclude },
+      });
     });
 
     await logFinanceAudit("created", "mileage", entry.id, { user, request }, undefined, entry);
@@ -135,7 +159,7 @@ export async function POST(request: NextRequest) {
     if (isFielder && entry.driver) {
       await notifyOfficeMileageSubmitted(
         `${entry.driver.firstName} ${entry.driver.lastName}`,
-        toNumber(entry.totalMiles),
+        totalMiles,
         entry.id
       );
     }

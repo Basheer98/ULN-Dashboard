@@ -98,6 +98,7 @@ export default function RootLayout() {
             <Stack.Screen name="finance/index" options={{ title: "Finance" }} />
             <Stack.Screen name="rates" options={{ title: "State Rates" }} />
             <Stack.Screen name="team" options={{ title: "Team" }} />
+            <Stack.Screen name="expenses/index" options={{ title: "My Expenses" }} />
             <Stack.Screen name="expenses/new" options={{ title: "Submit Expense" }} />
             <Stack.Screen name="expenses/[id]" options={{ title: "Expense Details" }} />
             <Stack.Screen name="mileage" options={{ title: "Mileage History" }} />

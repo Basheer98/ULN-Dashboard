@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonOk, requireUser } from "@/lib/api";
+import { handleApiError, jsonOk } from "@/lib/api";
 import { requireFielderSelf } from "@/lib/finance-auth";
 import { serializeReceiptForClient } from "@/lib/receipt-upload";
 
@@ -12,7 +12,10 @@ export async function GET(request: NextRequest) {
     const receipts = await prisma.receipt.findMany({
       where: {
         deletedAt: null,
-        transaction: { fielderId: user.fielderId!, deletedAt: null },
+        OR: [
+          { transaction: { fielderId: user.fielderId!, deletedAt: null } },
+          { uploadedById: user.id, transactionId: null },
+        ],
       },
       orderBy: { createdAt: "desc" },
       include: {

@@ -123,6 +123,7 @@ export const NAV_BY_ROLE: Record<UserRole, string[]> = {
 export const FINANCE_NAV = [
   { href: "/finance", label: "Overview" },
   { href: "/finance/expenses", label: "Expenses" },
+  { href: "/finance/expenses/approvals", label: "Approvals" },
   { href: "/finance/income", label: "Income" },
   { href: "/finance/receipts", label: "Receipts" },
   { href: "/finance/mileage", label: "Mileage" },

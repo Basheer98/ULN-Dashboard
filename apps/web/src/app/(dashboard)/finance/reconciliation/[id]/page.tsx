@@ -4,6 +4,7 @@ import {
   ReconciliationActions,
   ReconciliationItemToggle,
 } from "@/components/finance/finance-actions";
+import { BankStatementImport } from "@/components/finance/bank-statement-import";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, toNumber } from "@uln/shared";
 import Link from "next/link";
@@ -29,6 +30,8 @@ export default async function ReconciliationDetailPage({
   if (!reconciliation) notFound();
 
   const difference = toNumber(reconciliation.difference);
+  const canEdit =
+    reconciliation.status === "in_progress" || reconciliation.status === "balanced";
 
   return (
     <>
@@ -75,10 +78,14 @@ export default async function ReconciliationDetailPage({
           </div>
         </div>
 
+        <BankStatementImport reconciliationId={reconciliation.id} disabled={!canEdit} />
+
         <div className="card overflow-x-auto">
           <h2 className="mb-4 font-semibold text-foreground">Reconciliation Items</h2>
           {reconciliation.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No items yet.</p>
+            <p className="text-sm text-muted-foreground">
+              No items yet. Import a bank statement above, or clear ledger items manually.
+            </p>
           ) : (
             <table className="data-table">
               <thead>
@@ -86,6 +93,7 @@ export default async function ReconciliationDetailPage({
                   <th>Date</th>
                   <th>Description</th>
                   <th>Amount</th>
+                  <th>Source</th>
                   <th>Cleared</th>
                   <th>Actions</th>
                 </tr>
@@ -106,6 +114,13 @@ export default async function ReconciliationDetailPage({
                     </td>
                     <td>{formatCurrency(toNumber(item.amount))}</td>
                     <td>
+                      {item.isManual ? (
+                        <span className="badge badge-warning">Bank only</span>
+                      ) : (
+                        <span className="badge badge-neutral">Ledger</span>
+                      )}
+                    </td>
+                    <td>
                       {item.isCleared ? (
                         <span className="badge badge-success">Cleared</span>
                       ) : (
@@ -113,7 +128,7 @@ export default async function ReconciliationDetailPage({
                       )}
                     </td>
                     <td>
-                      {reconciliation.status === "in_progress" && (
+                      {canEdit && reconciliation.status !== "completed" && (
                         <ReconciliationItemToggle
                           reconciliationId={reconciliation.id}
                           itemId={item.id}

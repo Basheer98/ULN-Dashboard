@@ -71,6 +71,15 @@ export async function PATCH(
       include: { client: true, assignments: true, lineItems: true },
     });
 
+    if (parsed.data.status) {
+      try {
+        const { syncSingleProjectToGoogleSheet } = await import("@/lib/sheet-writeback");
+        await syncSingleProjectToGoogleSheet(id);
+      } catch {
+        // Best-effort — never block project updates on Sheets failures
+      }
+    }
+
     return jsonOk(serializeProject(project));
   } catch (error) {
     return handleApiError(error);

@@ -112,6 +112,18 @@ export async function PATCH(
       }
     }
 
+    if (
+      parsed.data.status === "in_progress" ||
+      parsed.data.status === "complete"
+    ) {
+      try {
+        const { syncSingleProjectToGoogleSheet } = await import("@/lib/sheet-writeback");
+        await syncSingleProjectToGoogleSheet(assignment.projectId);
+      } catch {
+        // Best-effort sheet sync
+      }
+    }
+
     return jsonOk(serializeProject(updated));
   } catch (error) {
     return handleApiError(error);

@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, requireUser } from "@/lib/api";
+import { handleApiError, jsonError } from "@/lib/api";
+import { assertCanAccessProjectFiles, requireAuthUser } from "@/lib/finance-auth";
 import { readFile } from "@/lib/storage";
 
 export async function GET(
@@ -9,14 +10,16 @@ export async function GET(
   { params }: { params: Promise<{ key: string }> }
 ) {
   try {
-    const user = await getRequestUser(request);
-    if (!user) return jsonError("Unauthorized", 401);
-
+    const user = requireAuthUser(await getRequestUser(request));
     const { key } = await params;
-    const attachment = await prisma.attachment.findFirst({ where: { fileKey: key } });
+    const fileKey = decodeURIComponent(key);
+
+    const attachment = await prisma.attachment.findFirst({ where: { fileKey } });
     if (!attachment) return jsonError("File not found", 404);
 
-    const buffer = await readFile(key);
+    await assertCanAccessProjectFiles(user, attachment.projectId);
+
+    const buffer = await readFile(fileKey);
     if (!buffer) return jsonError("File not found", 404);
 
     return new Response(new Uint8Array(buffer), {

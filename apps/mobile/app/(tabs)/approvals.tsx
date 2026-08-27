@@ -45,12 +45,24 @@ export default function ApprovalsScreen() {
   useFocusEffect(useCallback(() => void load(), [load]));
 
   const items = useMemo(() => {
-    const all = [
-      ...(data?.approvals.expenses ?? []),
-      ...(data?.approvals.mileage ?? []),
-      ...(data?.approvals.payments ?? []),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    return filter === "all" ? all : all.filter((item) => item.type === filter);
+    const expenses = data?.approvals.expenses ?? [];
+    const mileage = data?.approvals.mileage ?? [];
+    const payments = data?.approvals.payments ?? [];
+    // Expenses arrive pre-sorted by server priority; keep them ahead of other types.
+    const all =
+      filter === "expense"
+        ? expenses
+        : filter === "mileage"
+          ? mileage
+          : filter === "payment"
+            ? payments
+            : [
+                ...expenses,
+                ...[...mileage, ...payments].sort(
+                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                ),
+              ];
+    return all;
   }, [data, filter]);
 
   async function perform(item: OfficeApproval, action: "approve" | "reject" | "paid") {
@@ -135,6 +147,22 @@ export default function ApprovalsScreen() {
               {item.subtitle}
               {item.category ? ` · ${item.category}` : ""}
             </Text>
+            {item.type === "expense" && item.hasReceipt === false && (
+              <Text style={styles.flagText}>No receipt</Text>
+            )}
+            {item.type === "expense" && item.status === "pending_review" && (
+              <Text style={styles.flagText}>Needs review</Text>
+            )}
+            {item.type === "mileage" && item.hasOdometerPhotos === false && (
+              <Text style={styles.flagText}>Missing odometer photos</Text>
+            )}
+            {item.type === "mileage" &&
+              item.startOdometer != null &&
+              item.endOdometer != null && (
+                <Text style={styles.subtitleText}>
+                  Odo {item.startOdometer} → {item.endOdometer}
+                </Text>
+              )}
             <Text style={styles.date}>{new Date(item.createdAt).toLocaleDateString()}</Text>
 
             <View style={styles.actions}>
@@ -228,6 +256,13 @@ const styles = StyleSheet.create({
   amount: { fontFamily: fonts.bold, color: colors.foreground, fontSize: 19, lineHeight: 24 },
   cardTitle: { fontFamily: fonts.semibold, color: colors.foreground, fontSize: 15, lineHeight: 20, marginTop: 10 },
   subtitleText: { fontFamily: fonts.regular, color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  flagText: {
+    fontFamily: fonts.semibold,
+    color: colors.warning,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 6,
+  },
   date: { fontFamily: fonts.regular, color: colors.mutedForeground, fontSize: 11, lineHeight: 14, marginTop: 5 },
   actions: { flexDirection: "row", alignItems: "stretch", gap: 9, marginTop: 14 },
   rejectButton: {

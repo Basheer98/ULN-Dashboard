@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { FINANCE_SETTING_KEYS } from "@uln/shared";
+import type { ExpenseDuplicateMatch } from "@uln/shared";
+import { ExpenseSmartHints, ReceiptScanField } from "./expense-smart";
 
 interface SelectOption {
   id: string;
@@ -30,19 +32,43 @@ export function ExpenseForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [vendorId, setVendorId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [description, setDescription] = useState("");
+  const [fielderId, setFielderId] = useState("");
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<ExpenseDuplicateMatch[]>([]);
+  const [acknowledgeDuplicate, setAcknowledgeDuplicate] = useState(false);
   const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  const handleCategorySuggestion = useCallback((nextCategoryId: string | null, nextVendorId: string | null) => {
+    if (nextCategoryId && !categoryId) setCategoryId(nextCategoryId);
+    if (nextVendorId && !vendorId) setVendorId(nextVendorId);
+  }, [categoryId, vendorId]);
+
+  const handleDuplicateChange = useCallback((next: ExpenseDuplicateMatch[]) => {
+    setDuplicates(next);
+    if (next.length === 0) setAcknowledgeDuplicate(false);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError("");
     const form = new FormData(e.currentTarget);
+    const parsedAmount = Number(form.get("amount"));
+    if (duplicates.length > 0 && !acknowledgeDuplicate) {
+      setError("Possible duplicate detected. Check the box to confirm and continue.");
+      setLoading(false);
+      return;
+    }
     const res = await fetch("/api/v1/finance/expenses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         transactionDate: form.get("transactionDate"),
-        amount: Number(form.get("amount")),
+        amount: parsedAmount,
         description: form.get("description") || undefined,
         businessPurpose: form.get("businessPurpose") || undefined,
         categoryId: form.get("categoryId") || null,
@@ -56,6 +82,8 @@ export function ExpenseForm({
         isBillable: form.get("isBillable") === "on",
         notes: form.get("notes") || undefined,
         expenseStatus: "submitted",
+        receiptId,
+        acknowledgeDuplicate: duplicates.length > 0 ? acknowledgeDuplicate : undefined,
       }),
     });
     const data = await res.json();
@@ -71,6 +99,17 @@ export function ExpenseForm({
   return (
     <form onSubmit={handleSubmit} className="card space-y-4">
       <h2 className="font-semibold text-foreground">New Expense</h2>
+      <ReceiptScanField
+        onScanned={(result) => {
+          setReceiptId(result.receipt.id);
+          if (result.ocr.amount) setAmount(String(result.ocr.amount));
+          if (result.ocr.transactionDate) setTransactionDate(result.ocr.transactionDate);
+          if (result.ocr.vendorName) setDescription(result.ocr.vendorName);
+          const suggestion = result.suggestions?.categorySuggestion;
+          if (suggestion?.categoryId) setCategoryId(suggestion.categoryId);
+          if (suggestion?.vendorId) setVendorId(suggestion.vendorId);
+        }}
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="label">Date *</label>
@@ -78,13 +117,23 @@ export function ExpenseForm({
             name="transactionDate"
             type="date"
             required
-            defaultValue={new Date().toISOString().slice(0, 10)}
+            value={transactionDate}
+            onChange={(e) => setTransactionDate(e.target.value)}
             className="w-full"
           />
         </div>
         <div>
           <label className="label">Amount *</label>
-          <input name="amount" type="number" step="0.01" min="0.01" required className="w-full" />
+          <input
+            name="amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full"
+          />
         </div>
         <div>
           <label className="label">Category</label>
@@ -106,7 +155,12 @@ export function ExpenseForm({
         </div>
         <div>
           <label className="label">Vendor</label>
-          <select name="vendorId" className="w-full">
+          <select
+            name="vendorId"
+            value={vendorId}
+            onChange={(e) => setVendorId(e.target.value)}
+            className="w-full"
+          >
             <option value="">—</option>
             {vendors.map((v) => (
               <option key={v.id} value={v.id}>{v.name}</option>
@@ -133,7 +187,12 @@ export function ExpenseForm({
         </div>
         <div>
           <label className="label">Fielder</label>
-          <select name="fielderId" className="w-full">
+          <select
+            name="fielderId"
+            value={fielderId}
+            onChange={(e) => setFielderId(e.target.value)}
+            className="w-full"
+          >
             <option value="">—</option>
             {fielders.map((f) => (
               <option key={f.id} value={f.id}>{f.name}</option>
@@ -149,7 +208,12 @@ export function ExpenseForm({
         </div>
         <div className="sm:col-span-2">
           <label className="label">Description</label>
-          <input name="description" className="w-full" />
+          <input
+            name="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full"
+          />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Business Purpose</label>
@@ -170,6 +234,25 @@ export function ExpenseForm({
           <textarea name="notes" rows={2} className="w-full" />
         </div>
       </div>
+      <ExpenseSmartHints
+        amount={amount ? Number(amount) : null}
+        transactionDate={transactionDate}
+        description={description}
+        fielderId={fielderId || undefined}
+        vendorId={vendorId || undefined}
+        onCategorySuggestion={handleCategorySuggestion}
+        onDuplicateChange={handleDuplicateChange}
+      />
+      {duplicates.length > 0 && (
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={acknowledgeDuplicate}
+            onChange={(e) => setAcknowledgeDuplicate(e.target.checked)}
+          />
+          This is not a duplicate — submit anyway
+        </label>
+      )}
       {error && <p className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={loading} className="btn-primary">
         {loading ? "Saving..." : "Create Expense"}
@@ -536,6 +619,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: Record<stri
         [FINANCE_SETTING_KEYS.defaultCurrency]: form.get("defaultCurrency"),
         [FINANCE_SETTING_KEYS.fiscalYearStart]: form.get("fiscalYearStart"),
         [FINANCE_SETTING_KEYS.receiptRequiredAbove]: form.get("receiptRequiredAbove"),
+        [FINANCE_SETTING_KEYS.expenseReviewAbove]: form.get("expenseReviewAbove"),
         [FINANCE_SETTING_KEYS.companyName]: form.get("companyName"),
       }),
     });
@@ -587,6 +671,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: Record<stri
             type="number"
             step="0.01"
             defaultValue={settings[FINANCE_SETTING_KEYS.receiptRequiredAbove]}
+            className="w-full"
+          />
+        </div>
+        <div>
+          <label className="label">Expense Review Above ($)</label>
+          <input
+            name="expenseReviewAbove"
+            type="number"
+            step="0.01"
+            defaultValue={settings[FINANCE_SETTING_KEYS.expenseReviewAbove]}
             className="w-full"
           />
         </div>

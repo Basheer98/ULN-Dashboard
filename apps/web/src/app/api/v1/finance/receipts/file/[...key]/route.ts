@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, requireUser } from "@/lib/api";
-import { requireFinanceRead } from "@/lib/finance-auth";
+import { handleApiError, jsonError } from "@/lib/api";
+import { assertCanViewReceipt, requireAuthUser } from "@/lib/finance-auth";
 import { readFile } from "@/lib/storage";
 
 export async function GET(
@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ key: string[] }> }
 ) {
   try {
-    const user = requireUser(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { key } = await params;
     const storedFileName = key.map(decodeURIComponent).join("/");
 
@@ -19,14 +19,7 @@ export async function GET(
       include: { transaction: { select: { fielderId: true } } },
     });
     if (!receipt) return jsonError("Receipt not found", 404);
-
-    if (user.role === "fielder") {
-      if (receipt.transaction?.fielderId !== user.fielderId) {
-        return jsonError("Forbidden", 403);
-      }
-    } else {
-      requireFinanceRead(user);
-    }
+    assertCanViewReceipt(user, receipt);
 
     const buffer = await readFile(receipt.storedFileName, receipt.storageFileId);
     if (!buffer) return jsonError("File not found", 404);

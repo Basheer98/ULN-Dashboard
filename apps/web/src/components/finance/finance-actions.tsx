@@ -222,13 +222,40 @@ export function ReconciliationItemToggle({
 
   async function toggle() {
     setLoading(true);
-    await fetch(`/api/v1/finance/reconciliation/${reconciliationId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId, isCleared: !isCleared }),
-    });
-    router.refresh();
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/v1/finance/reconciliation/${reconciliationId}`);
+      const current = await res.json();
+      if (!res.ok) return;
+
+      const items = (current.items ?? []).map(
+        (item: {
+          id: string;
+          transactionId?: string | null;
+          description?: string | null;
+          amount: number;
+          transactionDate?: string | null;
+          isCleared: boolean;
+          isManual?: boolean;
+        }) => ({
+          id: item.id,
+          transactionId: item.transactionId,
+          description: item.description ?? undefined,
+          amount: item.amount,
+          transactionDate: item.transactionDate,
+          isCleared: item.id === itemId ? !isCleared : item.isCleared,
+          isManual: item.isManual,
+        })
+      );
+
+      await fetch(`/api/v1/finance/reconciliation/${reconciliationId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

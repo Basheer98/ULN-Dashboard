@@ -91,9 +91,12 @@ export default function ImportProjectsPage() {
     serviceAccountEmail: string | null;
     spreadsheetId: string | null;
     tabName: string | null;
+    writeEnabled?: boolean;
   } | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
   const [sheetSource, setSheetSource] = useState<string | null>(null);
+  const [pushResult, setPushResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/v1/clients")
@@ -142,6 +145,33 @@ export default function ImportProjectsPage() {
     setFileName(null);
     setSheetSource(
       `Google Sheet · ${data.meta.tabName} · ${data.meta.rowCount} rows · ${new Date(data.meta.fetchedAt).toLocaleString()}`
+    );
+  }
+
+  async function pushToGoogleSheet() {
+    setPushLoading(true);
+    setError(null);
+    setPushResult(null);
+    const res = await fetch("/api/v1/projects/import/sheet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "push" }),
+    });
+    const data = await res.json();
+    setPushLoading(false);
+
+    if (!res.ok) {
+      setError(data.error ?? "Could not push to Google Sheet");
+      return;
+    }
+    if (data.skipped) {
+      setPushResult(`Skipped: ${data.reason}`);
+      return;
+    }
+    setPushResult(
+      `Updated ${data.updated} row(s) on sheet${
+        data.unmatched?.length ? ` · ${data.unmatched.length} project(s) not found in sheet` : ""
+      }`
     );
   }
 
@@ -257,24 +287,41 @@ export default function ImportProjectsPage() {
               <p className="text-sm text-muted-foreground">
                 Pull live data from your configured tracker sheet ({sheetStatus.spreadsheetId}
                 {sheetStatus.tabName ? ` · tab ${sheetStatus.tabName}` : ""}). Review the preview
-                before importing — same validation as CSV upload.
+                before importing. Push writes dashboard status / fielder / SQFT back to the sheet.
               </p>
-              <button
-                type="button"
-                disabled={sheetLoading || !defaultClientId}
-                onClick={pullFromGoogleSheet}
-                className="btn-secondary"
-              >
-                {sheetLoading ? "Pulling…" : "Pull from Google Sheet"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={sheetLoading || !defaultClientId}
+                  onClick={pullFromGoogleSheet}
+                  className="btn-secondary"
+                >
+                  {sheetLoading ? "Pulling…" : "Pull from Google Sheet"}
+                </button>
+                <button
+                  type="button"
+                  disabled={pushLoading || sheetStatus.writeEnabled === false}
+                  onClick={pushToGoogleSheet}
+                  className="btn-primary"
+                >
+                  {pushLoading ? "Pushing…" : "Push status to Sheet"}
+                </button>
+              </div>
               {sheetSource && (
                 <p className="text-xs text-muted-foreground">Last pulled: {sheetSource}</p>
               )}
+              {pushResult && (
+                <p className="text-xs text-success">{pushResult}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Write-back needs the sheet shared as <strong>Editor</strong> (not Viewer only).
+                Status changes in the dashboard also sync automatically when configured.
+              </p>
             </div>
           ) : (
             <div className="space-y-2 text-sm text-muted-foreground">
               <p>
-                Connect your project tracker sheet to pull updates without exporting CSV.
+                Connect your project tracker sheet to pull and push updates without exporting CSV.
               </p>
               <ol className="list-decimal space-y-1 pl-5">
                 <li>Enable <strong>Google Sheets API</strong> in Google Cloud</li>
@@ -283,7 +330,7 @@ export default function ImportProjectsPage() {
                   <code className="text-xs">
                     {sheetStatus?.serviceAccountEmail ?? "your service account email"}
                   </code>{" "}
-                  as Viewer
+                  as <strong>Editor</strong> (required for write-back)
                 </li>
                 <li>
                   Set <code className="text-xs">GOOGLE_SHEETS_SPREADSHEET_ID</code> in{" "}

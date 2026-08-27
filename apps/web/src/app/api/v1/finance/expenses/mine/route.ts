@@ -6,7 +6,7 @@ import { handleApiError, jsonError, jsonOk } from "@/lib/api";
 import { requireFielderSelf } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
 import { serializeTransaction, transactionInclude } from "@/lib/finance-transactions";
-import { createExpenseTransaction } from "@/lib/finance-expense";
+import { prepareExpenseCreate } from "@/lib/expense-create";
 import { notifyOfficeExpenseSubmitted } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
@@ -38,10 +38,20 @@ export async function POST(request: NextRequest) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
     }
 
-    const expense = await createExpenseTransaction(parsed.data, user, {
-      forceFielderId: user.fielderId!,
-      defaultStatus: "submitted",
-    });
+    const result = await prepareExpenseCreate(
+      { ...parsed.data, expenseStatus: "submitted" },
+      user,
+      {
+        forceFielderId: user.fielderId!,
+        defaultStatus: "submitted",
+      }
+    );
+
+    if (!result.ok) {
+      return jsonError(result.error, 400);
+    }
+
+    const expense = result.expense;
 
     await logFinanceAudit("created", "expense", expense.id, { user, request }, undefined, expense);
 

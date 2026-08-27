@@ -23,6 +23,9 @@ export async function POST(
     if (!existing.isReimbursable) {
       return jsonError("Expense is not reimbursable", 400);
     }
+    if (existing.expenseStatus !== "approved") {
+      return jsonError("Only approved expenses can be reimbursed", 400);
+    }
 
     const expense = await prisma.financialTransaction.update({
       where: { id },

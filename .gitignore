@@ -8,6 +8,10 @@ build/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.staging
+.env.bak
 .DS_Store
 *.tsbuildinfo
 coverage/

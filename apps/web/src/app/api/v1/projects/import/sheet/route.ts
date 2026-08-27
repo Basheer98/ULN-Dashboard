@@ -22,11 +22,12 @@ export async function GET(request: NextRequest) {
 }
 
 const postSchema = z.object({
-  action: z.enum(["fetch", "import"]),
-  defaultClientId: z.string().min(1, "Billing client is required"),
+  action: z.enum(["fetch", "import", "push"]),
+  defaultClientId: z.string().optional(),
   updateExisting: z.boolean().optional(),
   acknowledgeWarnings: z.boolean().optional(),
   spreadsheetId: z.string().optional(),
+  projectNumbers: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -36,6 +37,16 @@ export async function POST(request: NextRequest) {
     const parsed = postSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message ?? "Invalid request", 400);
+    }
+
+    if (parsed.data.action === "push") {
+      const { syncProjectsToGoogleSheet } = await import("@/lib/sheet-writeback");
+      const result = await syncProjectsToGoogleSheet(parsed.data.projectNumbers);
+      return jsonOk(result);
+    }
+
+    if (!parsed.data.defaultClientId) {
+      return jsonError("Billing client is required for project tracker imports", 400);
     }
 
     const sheet = await fetchProjectTrackerSheet({
@@ -68,9 +79,25 @@ export async function POST(request: NextRequest) {
       return jsonError(result.results[0]?.message ?? "Sheet import failed", 400);
     }
 
+    // Best-effort write-back of imported project statuses
+    let writeBack: unknown = null;
+    try {
+      const { syncProjectsToGoogleSheet } = await import("@/lib/sheet-writeback");
+      const numbers = result.results
+        .filter((r) => r.status === "created" || r.status === "updated")
+        .map((r) => r.projectNumber)
+        .filter(Boolean);
+      if (numbers.length) {
+        writeBack = await syncProjectsToGoogleSheet(numbers);
+      }
+    } catch {
+      writeBack = { skipped: true, reason: "Write-back failed (check Sheets Editor access)" };
+    }
+
     return jsonOk(
       {
         ...result,
+        writeBack,
         meta: {
           tabName: sheet.tabName,
           range: sheet.range,

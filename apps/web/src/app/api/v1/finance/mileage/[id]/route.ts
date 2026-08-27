@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { toNumber } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
 import {
-  canViewTransaction,
-  requireFinanceRead,
+  assertCanViewTransaction,
+  requireAuthUser,
   requireFinanceWrite,
 } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
+import { mileagePhotoInclude, serializeMileage } from "@/lib/mileage";
 
 const statusSchema = z.object({
   status: z.enum([
@@ -24,38 +24,20 @@ const statusSchema = z.object({
   ]),
 });
 
-function serializeMileage(entry: {
-  totalMiles: unknown;
-  startOdometer: unknown;
-  endOdometer: unknown;
-  mileageRate: unknown;
-  reimbursement: unknown;
-  [key: string]: unknown;
-}) {
-  return {
-    ...entry,
-    totalMiles: toNumber(entry.totalMiles),
-    startOdometer: entry.startOdometer != null ? toNumber(entry.startOdometer) : null,
-    endOdometer: entry.endOdometer != null ? toNumber(entry.endOdometer) : null,
-    mileageRate: toNumber(entry.mileageRate),
-    reimbursement: toNumber(entry.reimbursement),
-  };
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requireFinanceRead(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { id } = await params;
 
     const entry = await prisma.mileageEntry.findUnique({
       where: { id },
-      include: { driver: true, vehicle: true, trip: true },
+      include: { driver: true, vehicle: true, trip: true, ...mileagePhotoInclude },
     });
     if (!entry) return jsonError("Mileage entry not found", 404);
-    if (!canViewTransaction(user, entry.driverId)) return jsonError("Forbidden", 403);
+    assertCanViewTransaction(user, entry.driverId);
 
     return jsonOk(serializeMileage(entry));
   } catch (error) {
@@ -80,7 +62,7 @@ export async function PUT(
     const entry = await prisma.mileageEntry.update({
       where: { id },
       data: { status: parsed.data.status },
-      include: { driver: true, vehicle: true, trip: true },
+      include: { driver: true, vehicle: true, trip: true, ...mileagePhotoInclude },
     });
 
     await logFinanceAudit("updated", "mileage", id, { user, request }, existing, entry);

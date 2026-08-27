@@ -84,6 +84,7 @@ model User {
   financeTransactionsCreated FinancialTransaction[] @relation("FinanceTransactionCreator")
   financeTransactionsReviewed FinancialTransaction[] @relation("FinanceTransactionReviewer")
   receiptsUploaded Receipt[]
+  mileagePhotosUploaded MileagePhoto[]
   financeAuditLogs FinancialAuditLog[]
   mileageEntries   MileageEntry[]
   notifications    Notification[]
@@ -655,11 +656,40 @@ model MileageEntry {
   notes            String?
   submittedById    String?  @map("submitted_by_id")
   submittedBy      User?    @relation(fields: [submittedById], references: [id])
+  photos           MileagePhoto[]
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@index([driverId, date])
   @@map("mileage_entries")
+}
+
+enum MileagePhotoKind {
+  start_odometer
+  end_odometer
+}
+
+model MileagePhoto {
+  id               String           @id @default(cuid())
+  mileageEntryId   String?          @map("mileage_entry_id")
+  mileageEntry     MileageEntry?    @relation(fields: [mileageEntryId], references: [id], onDelete: Cascade)
+  kind             MileagePhotoKind
+  originalFileName String           @map("original_file_name")
+  storedFileName   String           @map("stored_file_name")
+  mimeType         String           @map("mime_type")
+  fileSize         Int              @map("file_size")
+  storageProvider  String           @default("local") @map("storage_provider")
+  storageFileId    String?          @map("storage_file_id")
+  storageUrl       String?          @map("storage_url")
+  fileHash         String?          @map("file_hash")
+  uploadedById     String?          @map("uploaded_by_id")
+  uploadedBy       User?            @relation(fields: [uploadedById], references: [id])
+  createdAt        DateTime         @default(now()) @map("created_at")
+  deletedAt        DateTime?        @map("deleted_at")
+
+  @@index([mileageEntryId])
+  @@index([fileHash])
+  @@map("mileage_photos")
 }
 
 model BankReconciliation {

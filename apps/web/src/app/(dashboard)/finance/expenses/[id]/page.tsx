@@ -1,11 +1,22 @@
 import { StatusBadge } from "@/components/layout";
 import { FinanceHeader } from "@/components/finance/finance-nav";
 import { ExpenseActions } from "@/components/finance/finance-actions";
+import {
+  ExpenseReceiptUpload,
+  ReceiptVerifyActions,
+} from "@/components/finance/receipt-actions";
 import { prisma } from "@/lib/prisma";
 import { transactionInclude } from "@/lib/finance-transactions";
 import { formatCurrency, formatStatus, toNumber } from "@uln/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
+function receiptFileUrl(storedFileName: string) {
+  return `/api/v1/finance/receipts/file/${storedFileName
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
 
 export default async function ExpenseDetailPage({
   params,
@@ -45,7 +56,9 @@ export default async function ExpenseDetailPage({
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Status</dt>
-                <dd><StatusBadge status={expense.expenseStatus ?? "draft"} /></dd>
+                <dd>
+                  <StatusBadge status={expense.expenseStatus ?? "draft"} />
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Category</dt>
@@ -80,7 +93,9 @@ export default async function ExpenseDetailPage({
                     <Link href={`/projects/${expense.projectId}`} className="link">
                       {expense.project.projectNumber}
                     </Link>
-                  ) : "—"}
+                  ) : (
+                    "—"
+                  )}
                 </dd>
               </div>
               <div className="flex justify-between">
@@ -113,29 +128,51 @@ export default async function ExpenseDetailPage({
           </div>
         </div>
 
-        {expense.receipts.length > 0 && (
-          <div className="card overflow-x-auto">
-            <h2 className="mb-4 font-semibold text-foreground">Receipts</h2>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>File</th>
-                  <th>Status</th>
-                  <th>Uploaded</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expense.receipts.map((r) => (
-                  <tr key={r.id}>
-                    <td>{r.originalFileName}</td>
-                    <td><StatusBadge status={r.verificationStatus} /></td>
-                    <td>{r.createdAt.toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="card space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <h2 className="font-semibold text-foreground">Receipts</h2>
+            <ExpenseReceiptUpload expenseId={expense.id} projectId={expense.projectId} />
           </div>
-        )}
+          {expense.receipts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No receipts attached yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Status</th>
+                    <th>Uploaded</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expense.receipts.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <a
+                          href={receiptFileUrl(r.storedFileName)}
+                          className="link"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {r.originalFileName}
+                        </a>
+                      </td>
+                      <td>
+                        <StatusBadge status={r.verificationStatus} />
+                      </td>
+                      <td>{r.createdAt.toLocaleDateString()}</td>
+                      <td>
+                        <ReceiptVerifyActions receiptId={r.id} status={r.verificationStatus} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {expense.allocations.length > 0 && (
           <div className="card overflow-x-auto">

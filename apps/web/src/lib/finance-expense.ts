@@ -2,14 +2,20 @@ import type { ExpenseInput } from "@uln/shared";
 import type { SessionUser } from "./auth";
 import { prisma } from "./prisma";
 import { generateTransactionNumber, transactionInclude, serializeTransaction } from "./finance-transactions";
+import { linkReceiptToExpense } from "./expense-smart-service";
 
 export async function createExpenseTransaction(
   data: ExpenseInput,
   user: SessionUser,
-  options?: { forceFielderId?: string; defaultStatus?: string }
+  options?: {
+    forceFielderId?: string;
+    defaultStatus?: string;
+    reviewReason?: string | null;
+  }
 ) {
   const transactionNumber = await generateTransactionNumber();
   const fielderId = options?.forceFielderId ?? data.fielderId ?? null;
+  const expenseStatus = (data.expenseStatus ?? options?.defaultStatus ?? "draft") as never;
 
   const tx = await prisma.financialTransaction.create({
     data: {
@@ -33,7 +39,8 @@ export async function createExpenseTransaction(
       isTaxDeductible: data.isTaxDeductible ?? true,
       paymentReference: data.paymentReference,
       notes: data.notes,
-      expenseStatus: (data.expenseStatus ?? options?.defaultStatus ?? "draft") as never,
+      expenseStatus,
+      reviewReason: options?.reviewReason ?? null,
       submittedById: fielderId ? user.id : null,
       createdById: user.id,
       allocations: data.allocations?.length
@@ -49,7 +56,16 @@ export async function createExpenseTransaction(
     include: transactionInclude,
   });
 
-  return serializeTransaction(tx);
+  if (data.receiptId) {
+    await linkReceiptToExpense(data.receiptId, tx.id, data.projectId ?? null);
+  }
+
+  const refreshed = await prisma.financialTransaction.findUniqueOrThrow({
+    where: { id: tx.id },
+    include: transactionInclude,
+  });
+
+  return serializeTransaction(refreshed);
 }
 
 export async function updateExpenseTransaction(id: string, data: Partial<ExpenseInput>) {

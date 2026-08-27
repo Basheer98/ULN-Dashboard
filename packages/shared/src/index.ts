@@ -153,3 +153,5 @@ export * from "./rates";
 export * from "./finance";
 export * from "./project-import";
 export * from "./sheet-csv";
+export * from "./bank-statement";
+export * from "./expense-smart";

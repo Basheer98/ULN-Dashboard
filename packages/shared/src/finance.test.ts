@@ -6,6 +6,7 @@ import {
   calculateProjectProfitability,
   calculateReconciliationDifference,
   sumDecimal,
+  mileageSchema,
 } from "./finance";
 import { hasPermission, hasAnyFinanceAccess } from "./permissions";
 
@@ -18,6 +19,23 @@ describe("finance calculations", () => {
   it("calculates miles from odometer", () => {
     expect(calculateMilesFromOdometer(1000, 1105.5)).toBe(105.5);
     expect(() => calculateMilesFromOdometer(2000, 1000)).toThrow();
+  });
+
+  it("requires odometer and photos on mileage schema", () => {
+    const missing = mileageSchema.safeParse({
+      date: "2026-08-05",
+      totalMiles: 10,
+    });
+    expect(missing.success).toBe(false);
+
+    const valid = mileageSchema.safeParse({
+      date: "2026-08-05",
+      startOdometer: 1000,
+      endOdometer: 1105.5,
+      startPhotoId: "photo-start",
+      endPhotoId: "photo-end",
+    });
+    expect(valid.success).toBe(true);
   });
 
   it("calculates invoice balance with partial payments", () => {

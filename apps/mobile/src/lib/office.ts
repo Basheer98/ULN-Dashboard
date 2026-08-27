@@ -10,6 +10,11 @@ export interface OfficeApproval {
   createdAt: string;
   category: string | null;
   projectNumber: string | null;
+  hasReceipt?: boolean;
+  receiptPendingVerify?: boolean;
+  hasOdometerPhotos?: boolean;
+  startOdometer?: number | null;
+  endOdometer?: number | null;
 }
 
 export interface OfficeSummary {

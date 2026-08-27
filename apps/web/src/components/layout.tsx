@@ -6,6 +6,7 @@ import type { UserRole } from "@uln/database";
 import { FINANCE_NAV, NAV_BY_ROLE } from "@uln/shared";
 import { NotificationBell } from "@/components/notification-bell";
 import { useMobileNav } from "@/components/mobile-nav-context";
+import { NAV_ICONS } from "@/components/nav-icons";
 
 const NAV_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -67,18 +68,30 @@ export function Sidebar({
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = NAV_ICONS[item.href];
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+              className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
                   ? "bg-accent/10 text-accent"
                   : "text-muted hover:bg-surface-hover hover:text-foreground"
               }`}
             >
-              {item.label}
+              {Icon && (
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition ${
+                    active
+                      ? "bg-accent/15 text-accent"
+                      : "bg-surface-elevated text-muted-foreground group-hover:bg-surface-hover group-hover:text-foreground"
+                  }`}
+                >
+                  <Icon />
+                </span>
+              )}
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
@@ -145,10 +158,17 @@ export function FinanceSubnav() {
     <nav className="scrollbar-none border-b border-border bg-surface/50 px-4 py-2 sm:px-6 lg:px-8 print:hidden">
       <div className="flex gap-1 overflow-x-auto pb-0.5">
         {FINANCE_NAV.map((item) => {
+          const moreSpecificActive = FINANCE_NAV.some(
+            (other) =>
+              other.href !== item.href &&
+              other.href.startsWith(`${item.href}/`) &&
+              (pathname === other.href || pathname.startsWith(`${other.href}/`))
+          );
           const active =
             item.href === "/finance"
               ? pathname === "/finance"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              : !moreSpecificActive &&
+                (pathname === item.href || pathname.startsWith(`${item.href}/`));
           return (
             <Link
               key={item.href}

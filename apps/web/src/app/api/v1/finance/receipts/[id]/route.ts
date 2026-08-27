@@ -2,7 +2,11 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
-import { requireFinanceRead, requireFinanceWrite } from "@/lib/finance-auth";
+import {
+  assertCanViewReceipt,
+  requireAuthUser,
+  requireFinanceWrite,
+} from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
 
 export async function GET(
@@ -10,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireFinanceRead(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { id } = await params;
 
     const receipt = await prisma.receipt.findFirst({
@@ -21,6 +25,7 @@ export async function GET(
       },
     });
     if (!receipt) return jsonError("Receipt not found", 404);
+    assertCanViewReceipt(user, receipt);
 
     return jsonOk(receipt);
   } catch (error) {

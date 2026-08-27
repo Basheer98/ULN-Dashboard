@@ -21,6 +21,9 @@ interface MileageEntry {
   status: string;
   startLocation: string | null;
   destination: string | null;
+  startOdometer: number | null;
+  endOdometer: number | null;
+  photos?: Array<{ id: string; kind: string }>;
 }
 
 function formatMoney(n: number) {
@@ -97,6 +100,12 @@ export default function MileageHistoryScreen() {
               <Text style={styles.meta}>
                 {item.totalMiles.toFixed(1)} miles · {new Date(item.date).toLocaleDateString()}
               </Text>
+              {item.startOdometer != null && item.endOdometer != null ? (
+                <Text style={styles.meta}>
+                  Odo {item.startOdometer.toFixed(1)} → {item.endOdometer.toFixed(1)}
+                  {item.photos && item.photos.length >= 2 ? " · photos attached" : ""}
+                </Text>
+              ) : null}
             </View>
           );
         }}

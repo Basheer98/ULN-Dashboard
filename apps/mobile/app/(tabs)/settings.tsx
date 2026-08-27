@@ -16,6 +16,7 @@ import {
   getUser,
   type MobileUser,
 } from "../../src/lib/auth";
+import { AccountSecuritySection } from "../../src/components/account-security";
 import { colors, getStatusColor } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 
@@ -144,6 +145,7 @@ export default function SettingsScreen() {
           <Text style={styles.infoLabel}>Company</Text>
           <Text style={styles.infoValue}>Urbanlink Networks LLC</Text>
         </View>
+        <AccountSecuritySection />
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
@@ -244,7 +246,7 @@ export default function SettingsScreen() {
         <Text style={styles.menuTitle}>Submit Expense</Text>
         <Text style={styles.menuDesc}>Add receipt and request reimbursement</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.menuItem} onPress={() => router.push("/(tabs)/expenses")}>
+      <TouchableOpacity style={styles.menuItem} onPress={() => router.push("/expenses")}>
         <Text style={styles.menuTitle}>My Expenses</Text>
         <Text style={styles.menuDesc}>Track submitted expense status</Text>
       </TouchableOpacity>
@@ -283,6 +285,7 @@ export default function SettingsScreen() {
         <Text style={styles.infoValue}>Urbanlink Networks LLC</Text>
       </View>
 
+      <AccountSecuritySection />
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Sign Out</Text>
       </TouchableOpacity>

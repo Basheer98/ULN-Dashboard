@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
 import {
-  canViewTransaction,
-  requireFinanceRead,
+  assertCanViewTransaction,
+  requireAuthUser,
   requireFinanceWrite,
 } from "@/lib/finance-auth";
 import { logFinanceAudit } from "@/lib/finance-audit";
@@ -24,12 +24,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requireFinanceRead(await getRequestUser(request));
+    const user = requireAuthUser(await getRequestUser(request));
     const { id } = await params;
 
     const expense = await getExpense(id);
     if (!expense || expense.deletedAt) return jsonError("Expense not found", 404);
-    if (!canViewTransaction(user, expense.fielderId)) return jsonError("Forbidden", 403);
+    assertCanViewTransaction(user, expense.fielderId);
 
     return jsonOk(serializeTransaction(expense));
   } catch (error) {

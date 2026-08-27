@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonOk, requireOfficeUser } from "@/lib/api";
-import { hasPermission, toNumber } from "@uln/shared";
+import { hasPermission, sortByApprovalPriority, toNumber } from "@uln/shared";
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,15 +38,23 @@ export async function GET(request: NextRequest) {
               deletedAt: null,
             },
             orderBy: { createdAt: "desc" },
-            include: { fielder: true, category: true, project: true },
-            take: 20,
+            include: {
+              fielder: true,
+              category: true,
+              project: true,
+              receipts: { where: { deletedAt: null }, select: { id: true, verificationStatus: true } },
+            },
+            take: 50,
           })
         : Promise.resolve([]),
       canFinance
         ? prisma.mileageEntry.findMany({
             where: { status: { in: ["submitted", "pending_review"] } },
             orderBy: { createdAt: "desc" },
-            include: { driver: true },
+            include: {
+              driver: true,
+              photos: { where: { deletedAt: null }, select: { id: true, kind: true } },
+            },
             take: 20,
           })
         : Promise.resolve([]),
@@ -98,19 +106,23 @@ export async function GET(request: NextRequest) {
         ),
       })),
       approvals: {
-        expenses: pendingExpenses.map((expense) => ({
-          id: expense.id,
-          type: "expense" as const,
-          title: expense.description || expense.transactionNumber,
-          subtitle: expense.fielder
-            ? `${expense.fielder.firstName} ${expense.fielder.lastName}`
-            : "Company expense",
-          amount: toNumber(expense.amount),
-          status: expense.expenseStatus,
-          createdAt: expense.createdAt.toISOString(),
-          category: expense.category?.name ?? null,
-          projectNumber: expense.project?.projectNumber ?? null,
-        })),
+        expenses: sortByApprovalPriority(
+          pendingExpenses.map((expense) => ({
+            id: expense.id,
+            type: "expense" as const,
+            title: expense.description || expense.transactionNumber,
+            subtitle: expense.fielder
+              ? `${expense.fielder.firstName} ${expense.fielder.lastName}`
+              : "Company expense",
+            amount: toNumber(expense.amount),
+            status: expense.expenseStatus,
+            createdAt: expense.createdAt.toISOString(),
+            category: expense.category?.name ?? null,
+            projectNumber: expense.project?.projectNumber ?? null,
+            hasReceipt: expense.receipts.length > 0,
+            receiptPendingVerify: expense.receipts.some((r) => r.verificationStatus === "pending"),
+          }))
+        ).slice(0, 20),
         mileage: pendingMileage.map((entry) => ({
           id: entry.id,
           type: "mileage" as const,
@@ -121,6 +133,11 @@ export async function GET(request: NextRequest) {
           createdAt: entry.createdAt.toISOString(),
           category: "Mileage",
           projectNumber: null,
+          hasOdometerPhotos:
+            entry.photos.some((p) => p.kind === "start_odometer") &&
+            entry.photos.some((p) => p.kind === "end_odometer"),
+          startOdometer: entry.startOdometer != null ? toNumber(entry.startOdometer) : null,
+          endOdometer: entry.endOdometer != null ? toNumber(entry.endOdometer) : null,
         })),
         payments: pendingPayments.map((payment) => ({
           id: payment.id,
