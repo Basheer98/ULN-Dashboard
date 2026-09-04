@@ -8,6 +8,7 @@ import {
   formatCurrency,
   scoreApprovalPriority,
   sortByApprovalPriority,
+  stateName,
   toNumber,
 } from "@uln/shared";
 import Link from "next/link";
@@ -20,6 +21,7 @@ export default async function ExpensesPage({
     status?: string;
     categoryId?: string;
     fielderId?: string;
+    state?: string;
     from?: string;
     to?: string;
     reimburse?: string;
@@ -36,6 +38,13 @@ export default async function ExpensesPage({
   }
   if (params.categoryId) where.categoryId = params.categoryId;
   if (params.fielderId) where.fielderId = params.fielderId;
+  if (params.state) {
+    const state = params.state.toUpperCase();
+    where.OR = [
+      { workState: state },
+      { AND: [{ workState: null }, { project: { state } }] },
+    ];
+  }
   if (params.from || params.to) {
     where.transactionDate = {};
     if (params.from) where.transactionDate.gte = new Date(params.from);
@@ -148,7 +157,11 @@ export default async function ExpensesPage({
           }))}
           paymentMethods={paymentMethods.map((pm) => ({ id: pm.id, name: pm.name }))}
           vendors={vendors.map((v) => ({ id: v.id, name: v.name }))}
-          projects={projects.map((p) => ({ id: p.id, name: p.projectNumber }))}
+          projects={projects.map((p) => ({
+            id: p.id,
+            name: p.projectNumber,
+            state: p.state,
+          }))}
           fielders={fielders.map((f) => ({ id: f.id, name: `${f.firstName} ${f.lastName}` }))}
         />
 
@@ -165,6 +178,7 @@ export default async function ExpensesPage({
                   <th>Number</th>
                   <th>Description</th>
                   <th>Category</th>
+                  <th>State</th>
                   <th>Vendor</th>
                   <th>Amount</th>
                   <th>Flags</th>
@@ -204,6 +218,7 @@ export default async function ExpensesPage({
                       </td>
                       <td>{exp.description || "—"}</td>
                       <td>{exp.category?.name || "—"}</td>
+                      <td>{stateName(exp.workState || exp.project?.state)}</td>
                       <td>{exp.vendor?.name || "—"}</td>
                       <td>{formatCurrency(toNumber(exp.amount))}</td>
                       <td>

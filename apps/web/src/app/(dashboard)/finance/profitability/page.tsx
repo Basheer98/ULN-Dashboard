@@ -56,6 +56,9 @@ export default async function ProfitabilityPage() {
     <>
       <FinanceHeader title="Profitability" subtitle="Project and fielder performance over time" />
       <main className="page-main space-y-6">
+        <Link href="/finance/profitability/states" className="link text-sm">
+          View profit by state (travel, hotels, gas) →
+        </Link>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Total Revenue</p>

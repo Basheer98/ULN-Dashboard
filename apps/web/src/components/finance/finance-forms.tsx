@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { FINANCE_SETTING_KEYS } from "@uln/shared";
+import { FINANCE_SETTING_KEYS, US_STATES } from "@uln/shared";
 import type { ExpenseDuplicateMatch } from "@uln/shared";
 import { ExpenseSmartHints, ReceiptScanField } from "./expense-smart";
 
@@ -25,7 +25,7 @@ export function ExpenseForm({
   categories: CategoryOption[];
   paymentMethods: SelectOption[];
   vendors: SelectOption[];
-  projects: SelectOption[];
+  projects: Array<SelectOption & { state?: string | null }>;
   fielders: SelectOption[];
 }) {
   const router = useRouter();
@@ -37,6 +37,8 @@ export function ExpenseForm({
   const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [fielderId, setFielderId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [workState, setWorkState] = useState("");
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<ExpenseDuplicateMatch[]>([]);
   const [acknowledgeDuplicate, setAcknowledgeDuplicate] = useState(false);
@@ -51,6 +53,12 @@ export function ExpenseForm({
     setDuplicates(next);
     if (next.length === 0) setAcknowledgeDuplicate(false);
   }, []);
+
+  function handleProjectChange(nextProjectId: string) {
+    setProjectId(nextProjectId);
+    const project = projects.find((p) => p.id === nextProjectId);
+    if (project?.state) setWorkState(project.state.toUpperCase());
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -77,6 +85,7 @@ export function ExpenseForm({
         projectId: form.get("projectId") || null,
         fielderId: form.get("fielderId") || null,
         vendorId: form.get("vendorId") || null,
+        workState: form.get("workState") || null,
         paidBy: form.get("paidBy") || undefined,
         isReimbursable: form.get("isReimbursable") === "on",
         isBillable: form.get("isBillable") === "on",
@@ -178,12 +187,36 @@ export function ExpenseForm({
         </div>
         <div>
           <label className="label">Project</label>
-          <select name="projectId" className="w-full">
+          <select
+            name="projectId"
+            value={projectId}
+            onChange={(e) => handleProjectChange(e.target.value)}
+            className="w-full"
+          >
             <option value="">—</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="label">Work state</label>
+          <select
+            name="workState"
+            value={workState}
+            onChange={(e) => setWorkState(e.target.value)}
+            className="w-full"
+          >
+            <option value="">—</option>
+            {US_STATES.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.code} — {s.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Used for state profit (flights, hotels, gas). Auto-fills from the project when set.
+          </p>
         </div>
         <div>
           <label className="label">Fielder</label>
@@ -870,7 +903,14 @@ export function ExpenseFilters({
 }: {
   categories: SelectOption[];
   fielders: SelectOption[];
-  current: { status?: string; categoryId?: string; fielderId?: string; from?: string; to?: string };
+  current: {
+    status?: string;
+    categoryId?: string;
+    fielderId?: string;
+    state?: string;
+    from?: string;
+    to?: string;
+  };
 }) {
   return (
     <form method="get" className="card grid gap-4 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
@@ -902,6 +942,17 @@ export function ExpenseFilters({
           <option value="">All</option>
           {fielders.map((f) => (
             <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label className="label">Work state</label>
+        <select name="state" defaultValue={current.state ?? ""} className="w-full sm:min-w-[140px]">
+          <option value="">All</option>
+          {US_STATES.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.code}
+            </option>
           ))}
         </select>
       </div>

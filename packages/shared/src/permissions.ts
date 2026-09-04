@@ -131,6 +131,7 @@ export const FINANCE_NAV = [
   { href: "/finance/vehicles", label: "Vehicles" },
   { href: "/finance/payments", label: "Invoice Payments" },
   { href: "/finance/profitability", label: "Profitability" },
+  { href: "/finance/profitability/states", label: "By State" },
   { href: "/finance/reconciliation", label: "Reconciliation" },
   { href: "/finance/loans", label: "Loans" },
   { href: "/finance/reports", label: "Reports" },

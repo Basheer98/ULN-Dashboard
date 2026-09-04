@@ -69,6 +69,17 @@ export const expenseSchema = z.object({
   fielderId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
   tripId: z.string().optional().nullable(),
+  workState: z
+    .preprocess(
+      (value) => (value === "" || value === undefined ? null : value),
+      z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{2}$/, "Work state must be a 2-letter code")
+        .nullable()
+    )
+    .optional(),
   paidBy: z.enum(["company", "employee"]).optional(),
   cardLastFour: z.string().max(4).optional(),
   isReimbursable: z.boolean().optional(),

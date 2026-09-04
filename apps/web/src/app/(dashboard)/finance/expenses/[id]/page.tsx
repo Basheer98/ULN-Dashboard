@@ -7,7 +7,7 @@ import {
 } from "@/components/finance/receipt-actions";
 import { prisma } from "@/lib/prisma";
 import { transactionInclude } from "@/lib/finance-transactions";
-import { formatCurrency, formatStatus, toNumber } from "@uln/shared";
+import { formatCurrency, formatStatus, stateName, toNumber } from "@uln/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -86,6 +86,10 @@ export default async function ExpenseDetailPage({
           <div className="card space-y-3">
             <h2 className="font-semibold text-foreground">Context</h2>
             <dl className="grid gap-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Work state</dt>
+                <dd>{stateName(expense.workState || expense.project?.state)}</dd>
+              </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Project</dt>
                 <dd>

@@ -170,18 +170,28 @@ export function ReceiptScanField({
   }
 
   return (
-    <div className="space-y-1.5">
-      <label className="label">Receipt (scan &amp; upload)</label>
-      <input
-        type="file"
-        accept="image/*,.pdf"
-        onChange={handleFileChange}
-        disabled={scanning}
-        className="w-full max-w-md"
-      />
+    <div className="rounded-xl border border-dashed border-accent/40 bg-accent/5 p-4 space-y-3">
+      <div>
+        <p className="font-semibold text-foreground">Upload or scan receipt</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Attach a photo or PDF. We scan it and fill amount, date, and vendor when possible.
+        </p>
+      </div>
+      <label className="btn-primary inline-flex cursor-pointer items-center justify-center">
+        {scanning ? "Scanning…" : "Choose receipt file"}
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          onChange={handleFileChange}
+          disabled={scanning}
+          className="sr-only"
+        />
+      </label>
       {scanning && <p className="text-xs text-muted-foreground">Scanning receipt…</p>}
       {!scanning && fileLabel && !error && (
-        <p className="text-xs text-accent">Attached: {fileLabel}</p>
+        <p className="text-sm text-accent">
+          Receipt attached: <span className="font-medium">{fileLabel}</span>
+        </p>
       )}
       {warning && <p className="text-xs text-warning">{warning}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}

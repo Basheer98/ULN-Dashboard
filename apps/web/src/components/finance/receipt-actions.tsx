@@ -122,16 +122,17 @@ export function ExpenseReceiptUpload({
   }
 
   return (
-    <div className="space-y-1.5 sm:max-w-xs sm:text-right">
-      <label className="label sm:mb-1">Attach receipt</label>
-      <input
-        type="file"
-        accept="image/*,.pdf"
-        onChange={handleFile}
-        disabled={uploading}
-        className="w-full text-sm"
-      />
-      {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+    <div className="space-y-2 sm:max-w-sm sm:text-right">
+      <label className="btn-secondary inline-flex cursor-pointer items-center justify-center text-sm">
+        {uploading ? "Uploading…" : "Attach receipt"}
+        <input
+          type="file"
+          accept="image/*,.pdf"
+          onChange={handleFile}
+          disabled={uploading}
+          className="sr-only"
+        />
+      </label>
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );

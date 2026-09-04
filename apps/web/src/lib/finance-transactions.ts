@@ -162,4 +162,145 @@ export async function getProjectProfitability(projectId: string) {
   };
 }
 
+export type StateProfitCategory = {
+  key: string;
+  label: string;
+  amount: number;
+};
+
+export type StateProfitRow = {
+  state: string;
+  stateLabel: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+  margin: number;
+  projectCount: number;
+  expenseCount: number;
+  categories: StateProfitCategory[];
+};
+
+/** Effective work state: expense.workState, else linked project.state. */
+export function effectiveExpenseState(expense: {
+  workState?: string | null;
+  project?: { state?: string | null } | null;
+}): string | null {
+  const raw = expense.workState || expense.project?.state || null;
+  if (!raw) return null;
+  return raw.trim().toUpperCase() || null;
+}
+
+export async function getStateProfitability(options?: {
+  from?: Date;
+  to?: Date;
+}): Promise<StateProfitRow[]> {
+  const { stateName } = await import("@uln/shared");
+  const dateFilter =
+    options?.from || options?.to
+      ? {
+          ...(options.from ? { gte: options.from } : {}),
+          ...(options.to ? { lte: options.to } : {}),
+        }
+      : undefined;
+
+  const [projects, expenses] = await Promise.all([
+    prisma.project.findMany({
+      where: { state: { not: null } },
+      include: {
+        invoices: {
+          include: {
+            invoicePayments: {
+              ...(dateFilter ? { where: { paidAt: dateFilter } } : {}),
+            },
+          },
+        },
+      },
+    }),
+    prisma.financialTransaction.findMany({
+      where: {
+        deletedAt: null,
+        transactionType: "expense",
+        ...(dateFilter ? { transactionDate: dateFilter } : {}),
+      },
+      include: {
+        category: true,
+        subcategory: true,
+        project: { select: { state: true } },
+      },
+    }),
+  ]);
+
+  const byState = new Map<
+    string,
+    {
+      revenue: number;
+      expenses: number;
+      projectIds: Set<string>;
+      expenseCount: number;
+      categories: Map<string, { label: string; amount: number }>;
+    }
+  >();
+
+  function bucket(state: string) {
+    let row = byState.get(state);
+    if (!row) {
+      row = {
+        revenue: 0,
+        expenses: 0,
+        projectIds: new Set(),
+        expenseCount: 0,
+        categories: new Map(),
+      };
+      byState.set(state, row);
+    }
+    return row;
+  }
+
+  for (const project of projects) {
+    const state = project.state?.trim().toUpperCase();
+    if (!state) continue;
+    const row = bucket(state);
+    row.projectIds.add(project.id);
+    row.revenue += sumDecimal(
+      project.invoices.flatMap((inv) => inv.invoicePayments.map((p) => toNumber(p.amount)))
+    );
+  }
+
+  for (const expense of expenses) {
+    const state = effectiveExpenseState(expense);
+    if (!state) continue;
+    const amount = toNumber(expense.amount);
+    const row = bucket(state);
+    row.expenses += amount;
+    row.expenseCount += 1;
+
+    const sub = expense.subcategory?.name;
+    const cat = expense.category?.name;
+    const key = sub ? `${cat ?? "Other"}:${sub}` : cat ?? "Uncategorized";
+    const label = sub && cat ? `${cat} · ${sub}` : cat ?? "Uncategorized";
+    const existing = row.categories.get(key) ?? { label, amount: 0 };
+    existing.amount += amount;
+    row.categories.set(key, existing);
+  }
+
+  return Array.from(byState.entries())
+    .map(([state, row]) => {
+      const profit = row.revenue - row.expenses;
+      return {
+        state,
+        stateLabel: stateName(state),
+        revenue: row.revenue,
+        expenses: row.expenses,
+        profit,
+        margin: row.revenue > 0 ? Math.round((profit / row.revenue) * 10000) / 100 : 0,
+        projectCount: row.projectIds.size,
+        expenseCount: row.expenseCount,
+        categories: Array.from(row.categories.values())
+          .map((c) => ({ key: c.label, label: c.label, amount: c.amount }))
+          .sort((a, b) => b.amount - a.amount),
+      };
+    })
+    .sort((a, b) => b.expenses - a.expenses || a.state.localeCompare(b.state));
+}
+
 export { transactionInclude };
