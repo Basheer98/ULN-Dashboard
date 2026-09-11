@@ -22,23 +22,25 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_RAILWAY_URL.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_APP.up.railway.app/api/v1"
       }
     },
     "production": {
       "extends": "base",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_RAILWAY_URL.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_APP.up.railway.app/api/v1"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleTeamId": "REPLACE_APPLE_TEAM_ID"
+        "appleTeamId": "YOUR_APPLE_TEAM_ID",
+        "ascAppId": "YOUR_ASC_APP_ID"
       },
       "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
         "track": "internal",
         "releaseStatus": "draft"
       }

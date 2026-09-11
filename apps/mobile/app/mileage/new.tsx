@@ -17,9 +17,10 @@ import { getToken } from "../../src/lib/auth";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 import { layout, screenStyles } from "../../src/lib/layout";
+import { looksLikeOfflineError, saveMileageDraft } from "../../src/lib/offline-queue";
 
 interface PhotoState {
-  id: string;
+  id: string | null;
   uri: string;
 }
 
@@ -78,6 +79,10 @@ export default function NewMileageScreen() {
       if (!response.ok) throw new Error(data.error || "Photo upload failed");
       return { id: data.id as string, uri };
     } catch (e) {
+      // Keep the photo locally so the trip can continue offline
+      if (looksLikeOfflineError(e)) {
+        return { id: null, uri };
+      }
       Alert.alert("Photo upload failed", e instanceof Error ? e.message : "Try again");
       return null;
     } finally {
@@ -102,6 +107,12 @@ export default function NewMileageScreen() {
       odometer
     );
     if (!uploaded) return;
+    if (!uploaded.id) {
+      Alert.alert(
+        "Saved on device",
+        "Weak signal — photo kept locally. Finish the trip and we’ll sync when online."
+      );
+    }
     if (kind === "start_odometer") setStartPhoto(uploaded);
     else setEndPhoto(uploaded);
   }
@@ -144,6 +155,32 @@ export default function NewMileageScreen() {
     }
 
     try {
+      let startId = startPhoto.id;
+      let endId = endPhoto.id;
+
+      if (!startId) {
+        const uploaded = await uploadPhoto(
+          "start_odometer",
+          startPhoto.uri,
+          "start.jpg",
+          String(start)
+        );
+        if (!uploaded?.id) throw new Error("network");
+        startId = uploaded.id;
+        setStartPhoto(uploaded);
+      }
+      if (!endId) {
+        const uploaded = await uploadPhoto(
+          "end_odometer",
+          endPhoto.uri,
+          "end.jpg",
+          String(end)
+        );
+        if (!uploaded?.id) throw new Error("network");
+        endId = uploaded.id;
+        setEndPhoto(uploaded);
+      }
+
       await apiRequest("/finance/mileage", {
         method: "POST",
         token,
@@ -155,8 +192,8 @@ export default function NewMileageScreen() {
           endOdometer: end,
           businessPurpose: notes.trim() || undefined,
           isReimbursable: true,
-          startPhotoId: startPhoto.id,
-          endPhotoId: endPhoto.id,
+          startPhotoId: startId,
+          endPhotoId: endId,
         }),
       });
 
@@ -164,7 +201,34 @@ export default function NewMileageScreen() {
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Failed to submit mileage");
+      if (looksLikeOfflineError(e) || (e instanceof Error && e.message === "network")) {
+        Alert.alert("No signal", "Save this trip on your phone and sync later?", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save offline",
+            onPress: () =>
+              void (async () => {
+                await saveMileageDraft({
+                  payload: {
+                    date: new Date().toISOString().slice(0, 10),
+                    startLocation: startLocation.trim() || undefined,
+                    destination: destination.trim() || undefined,
+                    startOdometer: start,
+                    endOdometer: end,
+                    businessPurpose: notes.trim() || undefined,
+                  },
+                  startPhotoUri: startPhoto.uri,
+                  endPhotoUri: endPhoto.uri,
+                });
+                Alert.alert("Saved on device", "Mileage will sync when you’re back online.", [
+                  { text: "OK", onPress: () => router.back() },
+                ]);
+              })(),
+          },
+        ]);
+      } else {
+        Alert.alert("Error", e instanceof Error ? e.message : "Failed to submit mileage");
+      }
     } finally {
       setSubmitting(false);
     }

@@ -41,6 +41,8 @@ export const projectSchema = z.object({
   qfield: z.coerce.number().int().min(1).max(2).optional().nullable(),
   description: z.string().optional(),
   sqft: z.coerce.number().min(0),
+  buriedSqft: z.coerce.number().min(0).optional().nullable(),
+  aerialSqft: z.coerce.number().min(0).optional().nullable(),
   clientSqftRate: z.coerce.number().min(0),
   status: z
     .enum([

@@ -260,7 +260,7 @@ export function ProjectActions({
       <div className="card lg:col-span-2">
         <h2 className="mb-4 font-semibold text-foreground">Project Status</h2>
         <div className="flex flex-wrap gap-2">
-          {["draft", "assigned", "in_progress", "complete", "invoiced", "paid"].map((status) => (
+          {["draft", "assigned", "in_progress", "complete", "invoiced", "paid", "cancelled"].map((status) => (
             <button
               key={status}
               type="button"

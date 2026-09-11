@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { ExpenseListBody, useMyExpenses } from "../../src/components/expense-list";
+import { PendingSyncBanner } from "../../src/components/pending-sync-banner";
 import { layout, screenStyles } from "../../src/lib/layout";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
@@ -10,6 +11,7 @@ export default function ExpensesTabScreen() {
 
   return (
     <View style={screenStyles.container}>
+      <PendingSyncBanner />
       <ExpenseListBody
         expenses={state.expenses}
         summary={state.summary}

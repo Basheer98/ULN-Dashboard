@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requireUser } from "@/lib/api";
 import { serializeNotification } from "@/lib/notifications";
 
 export async function PATCH(
@@ -9,7 +9,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requireUser(await getRequestUser(request));
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
     const action = body.action as "read" | "resolve" | undefined;

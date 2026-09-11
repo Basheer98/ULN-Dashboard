@@ -4,10 +4,13 @@ import { toNumber } from "@uln/shared";
 import { notifyPaymentPending } from "./push";
 
 export async function createInvoiceFromProject(projectId: string) {
-  const project = await prisma.project.findUniqueOrThrow({
-    where: { id: projectId },
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
     include: { client: true, lineItems: true, invoices: true },
   });
+  if (!project) {
+    throw new Error("Project not found");
+  }
 
   if (!["complete", "invoiced", "paid"].includes(project.status)) {
     throw new Error("Project must be complete before generating an invoice");
@@ -53,14 +56,17 @@ export async function createInvoiceFromProject(projectId: string) {
 }
 
 export async function createPaymentsFromProject(projectId: string) {
-  const project = await prisma.project.findUniqueOrThrow({
-    where: { id: projectId },
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
     include: {
       lineItems: true,
       assignments: { include: { fielder: true } },
       payments: true,
     },
   });
+  if (!project) {
+    throw new Error("Project not found");
+  }
 
   const created = [];
 

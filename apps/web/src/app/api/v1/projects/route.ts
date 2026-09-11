@@ -2,15 +2,17 @@ import { NextRequest } from "next/server";
 import { projectCreateSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
 import { assignFielderToProject } from "@/lib/assignments";
-import { serializeProject } from "@/lib/projects";
+import { activeProjectWhere, serializeProject } from "@/lib/projects";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   try {
     requireOfficeUser(await getRequestUser(request));
 
     const projects = await prisma.project.findMany({
+      where: activeProjectWhere,
       orderBy: { createdAt: "desc" },
       include: {
         client: true,
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requirePermission(await getRequestUser(request), "projects:write");
 
     const body = await request.json();
     const parsed = projectCreateSchema.safeParse(body);
@@ -37,8 +39,14 @@ export async function POST(request: NextRequest) {
 
     const projectNumber = parsed.data.projectNumber.trim();
     const existing = await prisma.project.findUnique({ where: { projectNumber } });
-    if (existing) {
+    if (existing && !existing.deletedAt) {
       return jsonError(`Project number ${projectNumber} already exists`, 400);
+    }
+    if (existing?.deletedAt) {
+      return jsonError(
+        `Project number ${projectNumber} belongs to a deleted project. Restore it or use a different number.`,
+        400
+      );
     }
 
     const { assignment, ...projectData } = parsed.data;
@@ -56,6 +64,8 @@ export async function POST(request: NextRequest) {
         qfield: projectData.qfield ?? null,
         description: projectData.description,
         sqft: projectData.sqft,
+        buriedSqft: projectData.buriedSqft ?? null,
+        aerialSqft: projectData.aerialSqft ?? null,
         clientSqftRate: projectData.clientSqftRate,
         status: assignment ? "assigned" : projectData.status ?? "draft",
         dueDate: projectData.dueDate ? new Date(projectData.dueDate) : null,
@@ -65,9 +75,29 @@ export async function POST(request: NextRequest) {
       include: { client: true, assignments: { include: { fielder: true } } },
     });
 
+    await logActivity({
+      entityType: "project",
+      entityId: project.id,
+      action: "created",
+      user,
+      summary: `Created by ${user.email}`,
+      metadata: {
+        projectNumber: project.projectNumber,
+        title: project.title,
+      },
+    });
+
     if (assignment) {
       try {
         await assignFielderToProject(project.id, assignment);
+        await logActivity({
+          entityType: "project",
+          entityId: project.id,
+          action: "updated",
+          user,
+          summary: `Fielder assigned by ${user.email}`,
+          metadata: { fielderId: assignment.fielderId },
+        });
       } catch (err) {
         await prisma.project.delete({ where: { id: project.id } });
         throw err;

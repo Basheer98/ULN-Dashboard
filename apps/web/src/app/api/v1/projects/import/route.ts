@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
 import {
   executeLegacyImport,
   executeTrackerImport,
@@ -17,7 +17,7 @@ const importSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requirePermission(await getRequestUser(request), "projects:write");
     const body = await request.json();
     const parsed = importSchema.safeParse(body);
     if (!parsed.success) {

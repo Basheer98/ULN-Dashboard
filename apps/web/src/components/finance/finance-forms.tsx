@@ -735,10 +735,22 @@ export function SettingsForm({ initialSettings }: { initialSettings: Record<stri
   );
 }
 
-export function ReconciliationForm({ paymentMethods }: { paymentMethods: SelectOption[] }) {
+export function ReconciliationForm({
+  paymentMethods,
+  lastEndingByMethod = {},
+}: {
+  paymentMethods: SelectOption[];
+  lastEndingByMethod?: Record<string, number>;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [paymentMethodId, setPaymentMethodId] = useState(paymentMethods[0]?.id ?? "");
+  const suggestedStart =
+    paymentMethodId && lastEndingByMethod[paymentMethodId] != null
+      ? String(lastEndingByMethod[paymentMethodId])
+      : "";
+  const [startingBalance, setStartingBalance] = useState(suggestedStart);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -780,7 +792,19 @@ export function ReconciliationForm({ paymentMethods }: { paymentMethods: SelectO
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="label">Payment Method *</label>
-          <select name="paymentMethodId" required className="w-full">
+          <select
+            name="paymentMethodId"
+            required
+            className="w-full"
+            value={paymentMethodId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setPaymentMethodId(id);
+              setStartingBalance(
+                lastEndingByMethod[id] != null ? String(lastEndingByMethod[id]) : ""
+              );
+            }}
+          >
             {paymentMethods.map((pm) => (
               <option key={pm.id} value={pm.id}>{pm.name}</option>
             ))}
@@ -792,7 +816,20 @@ export function ReconciliationForm({ paymentMethods }: { paymentMethods: SelectO
         </div>
         <div>
           <label className="label">Starting Balance *</label>
-          <input name="startingBalance" type="number" step="0.01" required className="w-full" />
+          <input
+            name="startingBalance"
+            type="number"
+            step="0.01"
+            required
+            className="w-full"
+            value={startingBalance}
+            onChange={(e) => setStartingBalance(e.target.value)}
+          />
+          {suggestedStart !== "" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Prefills from last statement ending balance for this account.
+            </p>
+          )}
         </div>
         <div>
           <label className="label">Ending Balance *</label>

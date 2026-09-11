@@ -205,7 +205,7 @@ export async function getStateProfitability(options?: {
 
   const [projects, expenses] = await Promise.all([
     prisma.project.findMany({
-      where: { state: { not: null } },
+      where: { deletedAt: null, state: { not: null } },
       include: {
         invoices: {
           include: {

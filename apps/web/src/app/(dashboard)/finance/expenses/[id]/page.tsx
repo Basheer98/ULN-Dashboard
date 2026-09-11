@@ -102,6 +102,34 @@ export default async function ExpenseDetailPage({
                   )}
                 </dd>
               </div>
+              {expense.project && (
+                <>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Project title</dt>
+                    <dd className="text-right">{expense.project.title}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Buried / Aerial SQFT</dt>
+                    <dd>
+                      {expense.project.buriedSqft != null
+                        ? toNumber(expense.project.buriedSqft).toLocaleString()
+                        : "—"}
+                      {" / "}
+                      {expense.project.aerialSqft != null
+                        ? toNumber(expense.project.aerialSqft).toLocaleString()
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Total SQFT</dt>
+                    <dd>
+                      {expense.project.sqft != null
+                        ? toNumber(expense.project.sqft).toLocaleString()
+                        : "—"}
+                    </dd>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Fielder</dt>
                 <dd>

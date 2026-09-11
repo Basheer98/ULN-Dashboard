@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { getToken } from "../../src/lib/auth";
+import { getToken, getUser } from "../../src/lib/auth";
 import {
   loadOfficeNotifications,
   updateNotification,
@@ -24,11 +24,14 @@ export default function InboxScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [isFielder, setIsFielder] = useState(false);
 
   const load = useCallback(async () => {
     const token = await getToken();
     if (!token) return router.replace("/login");
     try {
+      const user = await getUser();
+      setIsFielder(user?.role === "fielder");
       const data = await loadOfficeNotifications(token);
       setItems(data.notifications);
       setUnread(data.unreadCount);
@@ -51,27 +54,39 @@ export default function InboxScreen() {
       );
       setUnread((count) => Math.max(0, count - 1));
     }
+
+    if (
+      item.type.startsWith("payment") ||
+      item.entityType === "payment"
+    ) {
+      router.push("/earnings");
+      return;
+    }
+    if (item.type.startsWith("expense") || item.entityType === "expense") {
+      if (isFielder) {
+        router.push("/(tabs)/expenses");
+      } else {
+        router.push("/(tabs)/approvals");
+      }
+      return;
+    }
+    if (item.type.startsWith("mileage") || item.entityType === "mileage") {
+      if (isFielder) {
+        router.push("/mileage");
+      } else {
+        router.push("/(tabs)/approvals");
+      }
+      return;
+    }
     if (item.entityType === "project" && item.entityId) {
       router.push(`/projects/${item.entityId}`);
       return;
     }
-    if (item.entityType === "expense" && item.entityId) {
-      router.push("/(tabs)/approvals");
-      return;
-    }
-    if (item.entityType === "payment" && item.entityId) {
-      router.push("/(tabs)/approvals");
-      return;
-    }
-    if (item.type.includes("expense") || item.type.includes("mileage") || item.type.includes("payment")) {
-      router.push("/(tabs)/approvals");
-      return;
-    }
     if (item.type.includes("job") || item.type.includes("project")) {
-      router.push("/(tabs)/projects");
+      router.push(isFielder ? "/(tabs)/jobs" : "/(tabs)/projects");
       return;
     }
-    router.push("/(tabs)/monitor");
+    router.push(isFielder ? "/(tabs)/jobs" : "/(tabs)/monitor");
   }
 
   async function resolve(item: OfficeNotification) {
@@ -94,8 +109,10 @@ export default function InboxScreen() {
     <View style={screenStyles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Activity inbox</Text>
-          <Text style={styles.subtitle}>{unread} unread notification{unread === 1 ? "" : "s"}</Text>
+          <Text style={styles.title}>{isFielder ? "Notifications" : "Activity inbox"}</Text>
+          <Text style={styles.subtitle}>
+            {unread} unread{isFielder ? " · payments & expenses" : " notification" + (unread === 1 ? "" : "s")}
+          </Text>
         </View>
       </View>
       <FlatList
@@ -112,7 +129,13 @@ export default function InboxScreen() {
             }}
           />
         }
-        ListEmptyComponent={<Text style={styles.empty}>You’re all caught up.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {isFielder
+              ? "No payment or expense updates yet."
+              : "You’re all caught up."}
+          </Text>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity style={[styles.card, item.isUnread && styles.unreadCard]} onPress={() => open(item)}>
             <View style={styles.cardTop}>
@@ -124,7 +147,7 @@ export default function InboxScreen() {
             </View>
             <Text style={styles.body}>{item.body}</Text>
             <TouchableOpacity style={styles.resolveButton} onPress={() => resolve(item)}>
-              <Text style={styles.resolveText}>Resolve</Text>
+              <Text style={styles.resolveText}>{isFielder ? "Dismiss" : "Resolve"}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         )}

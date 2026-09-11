@@ -46,12 +46,11 @@ export async function GET(request: NextRequest) {
       getFielderStatement(user.fielderId, month),
     ]);
 
-    const paidTotal = payments
-      .filter((p) => p.status === "paid")
-      .reduce((s, p) => s + toNumber(p.totalAmount), 0);
-    const pendingPayTotal = payments
-      .filter((p) => p.status !== "paid")
-      .reduce((s, p) => s + toNumber(p.totalAmount), 0);
+    const paidTotal = payments.reduce((s, p) => s + toNumber(p.amountPaid), 0);
+    const pendingPayTotal = payments.reduce(
+      (s, p) => s + Math.max(0, toNumber(p.totalAmount) - toNumber(p.amountPaid)),
+      0
+    );
 
     const activeAssignments = assignments.filter((a) =>
       ["assigned", "accepted", "in_progress"].includes(a.status)
@@ -123,6 +122,8 @@ export async function GET(request: NextRequest) {
           projectNumber: p.project?.projectNumber ?? "—",
           title: p.project?.title ?? "",
           amount: toNumber(p.totalAmount),
+          amountPaid: toNumber(p.amountPaid),
+          remaining: Math.max(0, toNumber(p.totalAmount) - toNumber(p.amountPaid)),
           status: p.status,
           paidAt: p.paidAt,
           createdAt: p.createdAt,

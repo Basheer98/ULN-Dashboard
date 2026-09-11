@@ -7,7 +7,10 @@ import Link from "next/link";
 export default async function ProfitabilityPage() {
   const [projects, fielders] = await Promise.all([
     prisma.project.findMany({
-      where: { status: { in: ["complete", "invoiced", "paid", "in_progress", "assigned"] } },
+      where: {
+        deletedAt: null,
+        status: { in: ["complete", "invoiced", "paid", "in_progress", "assigned"] },
+      },
       orderBy: { completedAt: "desc" },
       include: { client: true },
     }),
@@ -34,18 +37,18 @@ export default async function ProfitabilityPage() {
 
   const fielderRows = fielders
     .map((f) => {
-      const paid = f.payments
-        .filter((p) => p.status === "paid")
-        .reduce((s, p) => s + toNumber(p.totalAmount), 0);
-      const pending = f.payments
-        .filter((p) => p.status === "pending" || p.status === "approved")
-        .reduce((s, p) => s + toNumber(p.totalAmount), 0);
-      const sqft = f.assignments.reduce((s, a) => s + toNumber(a.assignedSqft), 0);
+      const paid = f.payments.reduce((s, p) => s + toNumber(p.amountPaid), 0);
+      const pending = f.payments.reduce(
+        (s, p) => s + Math.max(0, toNumber(p.totalAmount) - toNumber(p.amountPaid)),
+        0
+      );
+      const activeAssignments = f.assignments.filter((a) => !a.project.deletedAt);
+      const sqft = activeAssignments.reduce((s, a) => s + toNumber(a.assignedSqft), 0);
       return {
         id: f.id,
         name: `${f.firstName} ${f.lastName}`,
         sqft,
-        jobs: f.assignments.length,
+        jobs: activeAssignments.length,
         paid,
         pending,
       };

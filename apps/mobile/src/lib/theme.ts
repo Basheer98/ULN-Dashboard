@@ -29,6 +29,7 @@ export function getStatusColor(status: string): string {
     case "submitted":
     case "pending":
     case "pending_review":
+    case "partial":
       return colors.warning;
     case "assigned":
     case "sent":

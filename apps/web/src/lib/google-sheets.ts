@@ -93,13 +93,37 @@ export interface FetchedProjectSheet {
 
 export async function fetchProjectTrackerSheet(options?: {
   spreadsheetId?: string;
+  tabName?: string;
 }): Promise<FetchedProjectSheet> {
-  const { spreadsheetId, tabName, range } = await resolveSheetRange(options?.spreadsheetId);
+  const config = getGoogleSheetsConfig();
+  const id = parseSpreadsheetId(options?.spreadsheetId ?? config.spreadsheetId ?? "");
+  if (!id) {
+    throw new ApiError(
+      "Google Sheets sync is not configured. Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment.",
+      503
+    );
+  }
+
   const sheets = await getSheetsClient();
+  let tabName = options?.tabName ?? config.tabName;
+  let range = config.range;
+
+  if (options?.tabName) {
+    tabName = options.tabName;
+    range = quoteSheetTitle(options.tabName);
+  } else if (!tabName && !range) {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    tabName = meta.data.sheets?.[0]?.properties?.title ?? "Sheet1";
+    range = quoteSheetTitle(tabName);
+  } else if (tabName && !range) {
+    range = quoteSheetTitle(tabName);
+  } else if (!range) {
+    range = "A:Z";
+  }
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
+    spreadsheetId: id,
+    range: range!,
     majorDimension: "ROWS",
   });
 
@@ -110,13 +134,68 @@ export async function fetchProjectTrackerSheet(options?: {
 
   return {
     csv: sheetValuesToCsv(values),
-    spreadsheetId,
-    tabName,
-    range,
+    spreadsheetId: id,
+    tabName: tabName ?? range!,
+    range: range!,
     rowCount: values.length,
     fetchedAt: new Date().toISOString(),
     values,
   };
+}
+
+const SKIP_TAB_PATTERNS = [/form\s*responses/i, /^sheet\d+$/i];
+
+export function isImportableSheetTab(title: string): boolean {
+  const t = title.trim();
+  if (!t) return false;
+  return !SKIP_TAB_PATTERNS.some((re) => re.test(t));
+}
+
+export async function listProjectSheetTabs(spreadsheetId?: string): Promise<{
+  spreadsheetId: string;
+  tabs: string[];
+}> {
+  const config = getGoogleSheetsConfig();
+  const id = parseSpreadsheetId(spreadsheetId ?? config.spreadsheetId ?? "");
+  if (!id) {
+    throw new ApiError(
+      "Google Sheets sync is not configured. Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment.",
+      503
+    );
+  }
+  const sheets = await getSheetsClient();
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+  const tabs = (meta.data.sheets ?? [])
+    .map((s) => s.properties?.title ?? "")
+    .filter((title) => isImportableSheetTab(title));
+  return { spreadsheetId: id, tabs };
+}
+
+export async function fetchAllProjectTrackerTabs(options?: {
+  spreadsheetId?: string;
+}): Promise<{
+  spreadsheetId: string;
+  tabs: FetchedProjectSheet[];
+  skipped: string[];
+}> {
+  const { spreadsheetId, tabs } = await listProjectSheetTabs(options?.spreadsheetId);
+  const fetched: FetchedProjectSheet[] = [];
+  const skipped: string[] = [];
+
+  for (const tabName of tabs) {
+    try {
+      const sheet = await fetchProjectTrackerSheet({ spreadsheetId, tabName });
+      if (sheet.rowCount < 2) {
+        skipped.push(tabName);
+        continue;
+      }
+      fetched.push(sheet);
+    } catch {
+      skipped.push(tabName);
+    }
+  }
+
+  return { spreadsheetId, tabs: fetched, skipped };
 }
 
 export type ProjectSheetWriteRow = {

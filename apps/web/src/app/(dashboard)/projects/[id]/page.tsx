@@ -1,10 +1,15 @@
 import { Header, StatusBadge } from "@/components/layout";
 import { ProjectActions } from "@/components/project-actions";
 import { ProjectAttachments } from "@/components/project-attachments";
+import { ProjectEditForm } from "@/components/project-edit-form";
+import { ProjectDeleteButton } from "@/components/project-delete-button";
+import { ProjectActivityTimeline } from "@/components/project-activity";
 import { GenerateInvoiceButton, GeneratePaymentsButton } from "@/components/finance-actions";
 import { prisma } from "@/lib/prisma";
 import { getProjectFinancials, serializeProject } from "@/lib/projects";
-import { formatCurrency, toNumber } from "@uln/shared";
+import { getEntityActivity } from "@/lib/activity-log";
+import { getSessionUser } from "@/lib/auth";
+import { formatCurrency, hasPermission, toNumber } from "@uln/shared";
 import { notFound } from "next/navigation";
 
 export default async function ProjectDetailPage({
@@ -13,8 +18,11 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const project = await prisma.project.findUnique({
-    where: { id },
+  const user = await getSessionUser();
+  const canWrite = user ? hasPermission(user.role, "projects:write") : false;
+
+  const project = await prisma.project.findFirst({
+    where: { id, deletedAt: null },
     include: {
       client: true,
       lineItems: { include: { fielder: true } },
@@ -24,18 +32,21 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
-  const financials = await getProjectFinancials(id);
-  const fielders = await prisma.fielder.findMany({
-    where: { isActive: true },
-    orderBy: { lastName: "asc" },
-  });
+  const [financials, fielders, activities] = await Promise.all([
+    getProjectFinancials(id),
+    prisma.fielder.findMany({
+      where: { isActive: true },
+      orderBy: { lastName: "asc" },
+    }),
+    getEntityActivity("project", id),
+  ]);
 
   const data = serializeProject(project);
 
   const projectForActions = {
     id: data.id,
     status: data.status,
-    assignments: data.assignments.map((a: typeof data.assignments[number]) => ({
+    assignments: data.assignments.map((a: (typeof data.assignments)[number]) => ({
       id: a.id,
       fielderId: a.fielderId,
       fielderSqftRate: toNumber(a.fielderSqftRate),
@@ -43,7 +54,7 @@ export default async function ProjectDetailPage({
       status: a.status,
       fielder: { firstName: a.fielder.firstName, lastName: a.fielder.lastName },
     })),
-    lineItems: data.lineItems.map((item: typeof data.lineItems[number]) => ({
+    lineItems: data.lineItems.map((item: (typeof data.lineItems)[number]) => ({
       id: item.id,
       type: item.type,
       description: item.description,
@@ -51,6 +62,10 @@ export default async function ProjectDetailPage({
       fielderId: item.fielderId,
     })),
   };
+
+  const dueDateValue = project.dueDate
+    ? project.dueDate.toISOString().slice(0, 10)
+    : null;
 
   return (
     <>
@@ -64,6 +79,14 @@ export default async function ProjectDetailPage({
               <GenerateInvoiceButton projectId={project.id} />
               <GeneratePaymentsButton projectId={project.id} />
             </>
+          )}
+          {canWrite && (
+            <div className="ml-auto">
+              <ProjectDeleteButton
+                projectId={project.id}
+                projectNumber={project.projectNumber}
+              />
+            </div>
           )}
         </div>
 
@@ -88,6 +111,20 @@ export default async function ProjectDetailPage({
             <p className="text-sm">
               <span className="text-muted-foreground">SQFT:</span>{" "}
               {toNumber(project.sqft).toLocaleString()}
+              {(project.buriedSqft != null || project.aerialSqft != null) && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  (
+                  {project.buriedSqft != null
+                    ? `Buried ${toNumber(project.buriedSqft).toLocaleString()}`
+                    : null}
+                  {project.buriedSqft != null && project.aerialSqft != null ? " · " : null}
+                  {project.aerialSqft != null
+                    ? `Aerial ${toNumber(project.aerialSqft).toLocaleString()}`
+                    : null}
+                  )
+                </span>
+              )}
             </p>
             {project.description && (
               <p className="text-sm text-muted-foreground">{project.description}</p>
@@ -125,16 +162,51 @@ export default async function ProjectDetailPage({
           </div>
         </div>
 
-        <ProjectActions
-          project={projectForActions}
-          projectState={project.state}
-          fielders={fielders.map((f) => ({
-            id: f.id,
-            name: `${f.firstName} ${f.lastName}`,
-            defaultSqftRate: toNumber(f.defaultSqftRate),
-          }))}
-          financials={financials}
-        />
+        {canWrite && (
+          <ProjectEditForm
+            project={{
+              id: project.id,
+              projectNumber: project.projectNumber,
+              clientId: project.clientId,
+              title: project.title,
+              siteAddress: project.siteAddress,
+              city: project.city,
+              state: project.state,
+              zip: project.zip,
+              jobType: project.jobType,
+              qfield: project.qfield,
+              description: project.description,
+              sqft: toNumber(project.sqft),
+              buriedSqft: project.buriedSqft != null ? toNumber(project.buriedSqft) : null,
+              aerialSqft: project.aerialSqft != null ? toNumber(project.aerialSqft) : null,
+              clientSqftRate: toNumber(project.clientSqftRate),
+              status: project.status,
+              dueDate: dueDateValue,
+              notes: project.notes,
+            }}
+          />
+        )}
+
+        {canWrite ? (
+          <ProjectActions
+            project={projectForActions}
+            projectState={project.state}
+            fielders={fielders.map((f) => ({
+              id: f.id,
+              name: `${f.firstName} ${f.lastName}`,
+              defaultSqftRate: toNumber(f.defaultSqftRate),
+            }))}
+            financials={financials}
+          />
+        ) : (
+          <div className="card">
+            <p className="text-sm text-muted-foreground">
+              You have read-only access to this project.
+            </p>
+          </div>
+        )}
+
+        <ProjectActivityTimeline activities={activities} />
 
         <ProjectAttachments projectId={project.id} />
       </main>

@@ -1,10 +1,11 @@
 import { Header, StatusBadge } from "@/components/layout";
 import { ProjectsFilter } from "@/components/projects-filter";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, toNumber, stateName } from "@uln/shared";
+import { formatCurrency, toNumber, stateName, hasPermission } from "@uln/shared";
 import type { Prisma, ProjectStatus } from "@uln/database";
 import Link from "next/link";
 import { buildProjectSearchWhere } from "@/lib/project-search";
+import { getSessionUser } from "@/lib/auth";
 
 export default async function ProjectsPage({
   searchParams,
@@ -12,8 +13,10 @@ export default async function ProjectsPage({
   searchParams: Promise<{ state?: string; status?: string; qfield?: string; q?: string }>;
 }) {
   const params = await searchParams;
+  const user = await getSessionUser();
+  const canWrite = user ? hasPermission(user.role, "projects:write") : false;
 
-  const where: Prisma.ProjectWhereInput = {};
+  const where: Prisma.ProjectWhereInput = { deletedAt: null };
   if (params.state) where.state = params.state;
   if (params.status) where.status = params.status as ProjectStatus;
   if (params.qfield) where.qfield = Number(params.qfield);
@@ -36,14 +39,19 @@ export default async function ProjectsPage({
       <main className="page-main space-y-6">
         <div className="page-toolbar">
           <ProjectsFilter />
-          <div className="page-toolbar-actions">
-            <Link href="/projects/import" className="btn-secondary">
-              Import from Sheet
-            </Link>
-            <Link href="/projects/new" className="btn-primary">
-              New Project
-            </Link>
-          </div>
+          {canWrite && (
+            <div className="page-toolbar-actions">
+              <Link href="/projects/deleted" className="btn-secondary">
+                Deleted
+              </Link>
+              <Link href="/projects/import" className="btn-secondary">
+                Import from Sheet
+              </Link>
+              <Link href="/projects/new" className="btn-primary">
+                New Project
+              </Link>
+            </div>
+          )}
         </div>
         <div className="card overflow-x-auto">
           <table className="data-table">
@@ -82,7 +90,20 @@ export default async function ProjectsPage({
                       <td>{project.client.name}</td>
                       <td>{stateName(project.state)}</td>
                       <td>{project.qfield ? `QField ${project.qfield}` : "—"}</td>
-                      <td>{toNumber(project.sqft).toLocaleString()}</td>
+                      <td>
+                        {toNumber(project.sqft).toLocaleString()}
+                        {(project.buriedSqft != null || project.aerialSqft != null) && (
+                          <p className="text-xs text-muted-foreground">
+                            {project.buriedSqft != null
+                              ? `B ${toNumber(project.buriedSqft).toLocaleString()}`
+                              : null}
+                            {project.buriedSqft != null && project.aerialSqft != null ? " · " : null}
+                            {project.aerialSqft != null
+                              ? `A ${toNumber(project.aerialSqft).toLocaleString()}`
+                              : null}
+                          </p>
+                        )}
+                      </td>
                       <td>{formatCurrency(bill)}</td>
                       <td>{project.dueDate ? project.dueDate.toLocaleDateString() : "—"}</td>
                       <td>{fielder ? `${fielder.firstName} ${fielder.lastName}` : "—"}</td>

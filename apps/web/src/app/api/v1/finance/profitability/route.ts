@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     requireFinanceRead(await getRequestUser(request));
 
     const projects = await prisma.project.findMany({
-      where: { status: { not: "cancelled" } },
+      where: { deletedAt: null, status: { not: "cancelled" } },
       select: { id: true, projectNumber: true, title: true, status: true },
       orderBy: { projectNumber: "desc" },
     });

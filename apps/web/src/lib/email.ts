@@ -1,10 +1,17 @@
+interface EmailAttachment {
+  filename: string;
+  content: string; // base64
+  contentType?: string;
+}
+
 interface EmailOptions {
   to: string;
   subject: string;
   html: string;
+  attachments?: EmailAttachment[];
 }
 
-export async function sendEmail({ to, subject, html }: EmailOptions) {
+export async function sendEmail({ to, subject, html, attachments }: EmailOptions) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM ?? "ULN Operations <notifications@urbanlinknetworks.com>";
 
@@ -16,7 +23,21 @@ export async function sendEmail({ to, subject, html }: EmailOptions) {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ from, to, subject, html }),
+        body: JSON.stringify({
+          from,
+          to,
+          subject,
+          html,
+          ...(attachments?.length
+            ? {
+                attachments: attachments.map((a) => ({
+                  filename: a.filename,
+                  content: a.content,
+                  content_type: a.contentType,
+                })),
+              }
+            : {}),
+        }),
       });
       return { ok: res.ok };
     } catch (err) {
@@ -26,7 +47,12 @@ export async function sendEmail({ to, subject, html }: EmailOptions) {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.log("[email:dev]", { to, subject, html: html.slice(0, 200) });
+    console.log("[email:dev]", {
+      to,
+      subject,
+      html: html.slice(0, 200),
+      attachments: attachments?.map((a) => a.filename),
+    });
   }
   return { ok: false, skipped: true };
 }

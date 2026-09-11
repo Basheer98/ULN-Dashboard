@@ -11,6 +11,7 @@ export default async function SchedulePage() {
 
   const projects = await prisma.project.findMany({
     where: {
+      deletedAt: null,
       dueDate: { gte: fromDate, lte: toDate },
       status: { notIn: ["cancelled", "paid"] },
     },

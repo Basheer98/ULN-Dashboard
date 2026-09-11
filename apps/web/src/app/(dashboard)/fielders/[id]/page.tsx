@@ -34,7 +34,7 @@ export default async function FielderDetailPage({
       <main className="page-main space-y-6">
         <div className="flex flex-wrap gap-3">
           <Link href={`/fielders/${id}/statement`} className="btn-primary text-sm">
-            Monthly Statement
+            Payment statement
           </Link>
           <FielderEditForm
             fielder={{

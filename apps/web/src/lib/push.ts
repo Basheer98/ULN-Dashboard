@@ -1,38 +1,8 @@
 import { prisma } from "./prisma";
+import { notifyFielderInApp } from "./notifications";
+import { sendPushNotification } from "./push-send";
 
-export async function sendPushNotification(
-  pushToken: string,
-  title: string,
-  body: string,
-  data?: Record<string, string>
-) {
-  if (!pushToken.startsWith("ExponentPushToken")) {
-    return { ok: false, reason: "invalid token" };
-  }
-
-  try {
-    const res = await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        to: pushToken,
-        title,
-        body,
-        data: data ?? {},
-        sound: "default",
-      }),
-    });
-
-    const json = await res.json();
-    return { ok: res.ok, result: json };
-  } catch (err) {
-    console.error("Push notification failed:", err);
-    return { ok: false, reason: "network error" };
-  }
-}
+export { sendPushNotification } from "./push-send";
 
 export async function getFielderPushToken(fielderId: string | null | undefined) {
   if (!fielderId) return null;
@@ -51,7 +21,7 @@ export async function notifyFielderAssignment(
     pushToken,
     "New Job Assigned",
     `${projectNumber}: ${title}`,
-    { type: "assignment", projectNumber, assignmentId }
+    { type: "assignment", projectNumber, assignmentId, channelId: "jobs" }
   );
 }
 
@@ -71,12 +41,16 @@ export async function notifyPaymentSent(
   projectNumber: string,
   amount: number
 ) {
-  await notifyFielderById(
-    fielderId,
-    "Payment Sent 💰",
-    `$${amount.toFixed(2)} for ${projectNumber} has been paid and should arrive soon.`,
-    { type: "payment", projectNumber }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "payment_sent",
+    title: "Payment Sent",
+    body: `$${amount.toFixed(2)} for ${projectNumber} has been paid and should arrive soon.`,
+    href: "/earnings",
+    entityType: "payment",
+    entityId: projectNumber,
+    metadata: { projectNumber, amount },
+    pushData: { type: "payment", projectNumber },
+  });
 }
 
 export async function notifyPaymentApproved(
@@ -84,12 +58,16 @@ export async function notifyPaymentApproved(
   projectNumber: string,
   amount: number
 ) {
-  await notifyFielderById(
-    fielderId,
-    "Payment Approved",
-    `$${amount.toFixed(2)} for ${projectNumber} is approved — payment on the way.`,
-    { type: "payment_approved", projectNumber }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "payment_approved",
+    title: "Payment Approved",
+    body: `$${amount.toFixed(2)} for ${projectNumber} is approved — payment on the way.`,
+    href: "/earnings",
+    entityType: "payment",
+    entityId: projectNumber,
+    metadata: { projectNumber, amount },
+    pushData: { type: "payment_approved", projectNumber },
+  });
 }
 
 export async function notifyPaymentPending(
@@ -97,37 +75,47 @@ export async function notifyPaymentPending(
   projectNumber: string,
   amount: number
 ) {
-  await notifyFielderById(
-    fielderId,
-    "Earnings Recorded",
-    `$${amount.toFixed(2)} for ${projectNumber} is pending approval.`,
-    { type: "payment_pending", projectNumber }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "payment_pending",
+    title: "Earnings Recorded",
+    body: `$${amount.toFixed(2)} for ${projectNumber} is pending approval.`,
+    href: "/earnings",
+    entityType: "payment",
+    entityId: projectNumber,
+    metadata: { projectNumber, amount },
+    pushData: { type: "payment_pending", projectNumber },
+  });
 }
 
 export async function notifyExpenseApproved(fielderId: string, amount: number) {
-  await notifyFielderById(
-    fielderId,
-    "Expense Approved",
-    `Your $${amount.toFixed(2)} expense was approved.`,
-    { type: "expense_approved" }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "expense_approved",
+    title: "Expense Approved",
+    body: `Your $${amount.toFixed(2)} expense was approved.`,
+    href: "/(tabs)/expenses",
+    entityType: "expense",
+    pushData: { type: "expense_approved" },
+  });
 }
 
 export async function notifyExpenseReimbursed(fielderId: string, amount: number) {
-  await notifyFielderById(
-    fielderId,
-    "Reimbursement Sent",
-    `$${amount.toFixed(2)} reimbursement has been processed.`,
-    { type: "expense_reimbursed" }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "expense_reimbursed",
+    title: "Reimbursement Sent",
+    body: `$${amount.toFixed(2)} reimbursement has been processed.`,
+    href: "/(tabs)/expenses",
+    entityType: "expense",
+    pushData: { type: "expense_reimbursed" },
+  });
 }
 
 export async function notifyExpenseRejected(fielderId: string, amount: number) {
-  await notifyFielderById(
-    fielderId,
-    "Expense Rejected",
-    `Your $${amount.toFixed(2)} expense was rejected. Check the app for details.`,
-    { type: "expense_rejected" }
-  );
+  await notifyFielderInApp(fielderId, {
+    type: "expense_rejected",
+    title: "Expense Rejected",
+    body: `Your $${amount.toFixed(2)} expense was rejected. Check the app for details.`,
+    href: "/(tabs)/expenses",
+    entityType: "expense",
+    pushData: { type: "expense_rejected" },
+  });
 }

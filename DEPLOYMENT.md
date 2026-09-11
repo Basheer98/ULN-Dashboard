@@ -92,17 +92,17 @@ Railway → Settings → Networking → add `dashboard.urbanlinknetworks.com` (o
 
 ## Part 3 — Mobile app store preparation
 
-### 3.1 Replace placeholder icons (required before store submit)
+### 3.1 App icons & splash
 
-Current `apps/mobile/assets/*.png` files are tiny placeholders. Replace with:
+Brand assets are in `apps/mobile/assets/` (dark `#09090b`, teal `#2dd4bf` ULN mark):
 
 | Asset | Size | File |
 |-------|------|------|
 | App icon | 1024×1024 | `icon.png` |
 | Adaptive icon | 1024×1024 | `adaptive-icon.png` |
-| Splash | 1284×2778 or similar | `splash-icon.png` |
+| Splash | 1284×2778 | `splash-icon.png` |
 
-Use your ULN branding (dark background `#09090b`, teal accent `#2dd4bf`).
+Replace anytime if you have a final designer export.
 
 ### 3.2 Privacy policy (required both stores)
 
@@ -111,7 +111,7 @@ Host a privacy policy URL covering:
 - Account data (email, name, role)
 - Location not collected (unless you add it later)
 - Camera / photos (receipt uploads)
-- Push notifications (job assignments)
+- Push notifications (job assignments, payment updates)
 - Data stored on your Railway server
 - Contact email for data requests
 
@@ -119,19 +119,13 @@ Example hosting: `https://urbanlinknetworks.com/privacy` or a Notion/Google Doc 
 
 Add the URL later in App Store Connect and Play Console.
 
-### 3.3 Update production API URL
+### 3.3 Update production API URL + EAS project
 
-After Railway deploy, edit `apps/mobile/eas.json`:
+After Railway deploy:
 
-```json
-"production": {
-  "env": {
-    "EXPO_PUBLIC_API_URL": "https://YOUR-APP.up.railway.app/api/v1"
-  }
-}
-```
-
-Or set `EXPO_PUBLIC_API_URL` in [expo.dev](https://expo.dev) → your project → **Environment variables** (recommended).
+1. Set `EXPO_PUBLIC_API_URL` in [expo.dev](https://expo.dev) → Project → **Environment variables**, **or** edit `apps/mobile/eas.json` (`YOUR_RAILWAY_APP`).
+2. Run `eas init` and commit `EAS_PROJECT_ID` (required for production push tokens).
+3. Fill `appleTeamId` / `ascAppId` in `eas.json` and add `google-play-service-account.json` (gitignored) before submit.
 
 ---
 
@@ -148,7 +142,7 @@ cd apps/mobile
 eas init                     # links to expo.dev, sets EAS_PROJECT_ID
 ```
 
-`eas init` writes `EAS_PROJECT_ID` into your Expo project — commit `app.config.ts` changes if prompted.
+`eas init` writes `EAS_PROJECT_ID` into your Expo project — commit `app.config.ts` / env changes if prompted.
 
 ### 4.2 Preview build (test before store)
 
@@ -158,7 +152,7 @@ eas build --platform ios --profile preview
 eas build --platform android --profile preview
 ```
 
-Install on devices via QR link from expo.dev. Verify login, jobs, receipt upload against **production Railway API**.
+Install on devices via QR link from expo.dev. Verify login, jobs, receipt upload, payment push → Inbox/Earnings, and offline expense drafts against **production Railway API**.
 
 ### 4.3 Production builds
 

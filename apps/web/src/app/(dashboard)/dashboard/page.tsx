@@ -21,11 +21,14 @@ export default async function DashboardPage() {
     analytics,
     overdue,
   ] = await Promise.all([
-    prisma.project.count({ where: { status: { in: ["assigned", "in_progress"] } } }),
-    prisma.project.count({ where: { status: "complete" } }),
+    prisma.project.count({
+      where: { deletedAt: null, status: { in: ["assigned", "in_progress"] } },
+    }),
+    prisma.project.count({ where: { deletedAt: null, status: "complete" } }),
     prisma.fielderPayment.count({ where: { status: { in: ["pending", "approved"] } } }),
     prisma.invoice.count({ where: { status: { in: ["sent", "overdue", "partial"] } } }),
     prisma.project.findMany({
+      where: { deletedAt: null },
       take: 5,
       orderBy: { createdAt: "desc" },
       include: { client: true, assignments: { include: { fielder: true } } },

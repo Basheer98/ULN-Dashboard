@@ -92,11 +92,14 @@ export default function ImportProjectsPage() {
     spreadsheetId: string | null;
     tabName: string | null;
     writeEnabled?: boolean;
+    tabs?: string[];
   } | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
+  const [importAllLoading, setImportAllLoading] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [sheetSource, setSheetSource] = useState<string | null>(null);
   const [pushResult, setPushResult] = useState<string | null>(null);
+  const [allTabsResult, setAllTabsResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/v1/clients")
@@ -126,6 +129,7 @@ export default function ImportProjectsPage() {
     setSheetLoading(true);
     setError(null);
     setResult(null);
+    setAllTabsResult(null);
     setAcknowledgeWarnings(false);
 
     const res = await fetch("/api/v1/projects/import/sheet", {
@@ -146,6 +150,56 @@ export default function ImportProjectsPage() {
     setSheetSource(
       `Google Sheet · ${data.meta.tabName} · ${data.meta.rowCount} rows · ${new Date(data.meta.fetchedAt).toLocaleString()}`
     );
+  }
+
+  async function importAllMonthTabs() {
+    if (!defaultClientId) {
+      setError("Select a billing client before importing all tabs");
+      return;
+    }
+    setImportAllLoading(true);
+    setError(null);
+    setResult(null);
+    setAllTabsResult(null);
+
+    const res = await fetch("/api/v1/projects/import/sheet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "importAll",
+        defaultClientId,
+        updateExisting,
+        acknowledgeWarnings: true,
+      }),
+    });
+    const data = await res.json();
+    setImportAllLoading(false);
+
+    if (!res.ok) {
+      setError(data.error ?? "Could not import all tabs");
+      return;
+    }
+
+    const lines = (data.tabResults as Array<{
+      tabName: string;
+      created: number;
+      updated: number;
+      skipped: number;
+      errored: number;
+      message?: string;
+    }>)
+      .map(
+        (t) =>
+          `${t.tabName}: +${t.created} created, ${t.updated} updated, ${t.skipped} skipped` +
+          (t.errored ? `, ${t.errored} errors` : "") +
+          (t.message ? ` (${t.message})` : "")
+      )
+      .join("\n");
+
+    setAllTabsResult(
+      `All tabs · created ${data.created}, updated ${data.updated}, skipped ${data.skipped}, errors ${data.errored}\n${lines}`
+    );
+    router.refresh();
   }
 
   async function pushToGoogleSheet() {
@@ -286,9 +340,15 @@ export default function ImportProjectsPage() {
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 Pull live data from your configured tracker sheet ({sheetStatus.spreadsheetId}
-                {sheetStatus.tabName ? ` · tab ${sheetStatus.tabName}` : ""}). Review the preview
-                before importing. Push writes dashboard status / fielder / SQFT back to the sheet.
+                {sheetStatus.tabName ? ` · default tab ${sheetStatus.tabName}` : ""}). Review the
+                preview before importing, or import every month tab in one go. Push writes
+                dashboard status / fielder / SQFT back to the sheet.
               </p>
+              {sheetStatus.tabs && sheetStatus.tabs.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Tabs found: {sheetStatus.tabs.join(", ")}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -296,13 +356,21 @@ export default function ImportProjectsPage() {
                   onClick={pullFromGoogleSheet}
                   className="btn-secondary"
                 >
-                  {sheetLoading ? "Pulling…" : "Pull from Google Sheet"}
+                  {sheetLoading ? "Pulling…" : "Pull current tab"}
+                </button>
+                <button
+                  type="button"
+                  disabled={importAllLoading || !defaultClientId}
+                  onClick={importAllMonthTabs}
+                  className="btn-primary"
+                >
+                  {importAllLoading ? "Importing all tabs…" : "Import all month tabs"}
                 </button>
                 <button
                   type="button"
                   disabled={pushLoading || sheetStatus.writeEnabled === false}
                   onClick={pushToGoogleSheet}
-                  className="btn-primary"
+                  className="btn-secondary"
                 >
                   {pushLoading ? "Pushing…" : "Push status to Sheet"}
                 </button>
@@ -310,12 +378,18 @@ export default function ImportProjectsPage() {
               {sheetSource && (
                 <p className="text-xs text-muted-foreground">Last pulled: {sheetSource}</p>
               )}
+              {allTabsResult && (
+                <pre className="whitespace-pre-wrap rounded-lg bg-surface-elevated p-3 text-xs text-foreground">
+                  {allTabsResult}
+                </pre>
+              )}
               {pushResult && (
                 <p className="text-xs text-success">{pushResult}</p>
               )}
               <p className="text-xs text-muted-foreground">
-                Write-back needs the sheet shared as <strong>Editor</strong> (not Viewer only).
-                Status changes in the dashboard also sync automatically when configured.
+                &quot;Import all month tabs&quot; skips Form Responses and empty/non-tracker sheets.
+                Check <strong>Update existing</strong> below if you want to refresh projects already
+                in the dashboard. Write-back needs the sheet shared as <strong>Editor</strong>.
               </p>
             </div>
           ) : (

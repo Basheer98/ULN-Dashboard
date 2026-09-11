@@ -1,9 +1,16 @@
 import type { Notification, NotificationType, Prisma, UserRole } from "@uln/database";
 import { prisma } from "./prisma";
 import { notifyOfficeByEmail } from "./email";
-import { sendPushNotification } from "./push";
+import { sendPushNotification } from "./push-send";
 
 const OFFICE_ROLES: UserRole[] = ["admin", "dispatcher", "accountant"];
+
+function channelForType(type: string): string {
+  if (type.startsWith("payment")) return "payments";
+  if (type.startsWith("expense") || type.startsWith("mileage")) return "expenses";
+  if (type.startsWith("job") || type === "assignment") return "jobs";
+  return "operations";
+}
 
 export function serializeNotification(n: Notification) {
   return {
@@ -20,6 +27,67 @@ export function serializeNotification(n: Notification) {
     isUnread: !n.readAt,
     isOpen: !n.resolvedAt,
   };
+}
+
+/** Persist an in-app notification and send Expo push when a token exists. */
+export async function notifyUser(params: {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  href?: string;
+  entityType?: string;
+  entityId?: string;
+  metadata?: Record<string, unknown>;
+  pushData?: Record<string, string>;
+}) {
+  await prisma.notification.create({
+    data: {
+      userId: params.userId,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      href: params.href ?? null,
+      entityType: params.entityType ?? null,
+      entityId: params.entityId ?? null,
+      metadata: params.metadata as Prisma.InputJsonValue | undefined,
+    },
+  });
+
+  const user = await prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { pushToken: true },
+  });
+  if (!user?.pushToken) return;
+
+  await sendPushNotification(user.pushToken, params.title, params.body, {
+    type: params.pushData?.type ?? params.type,
+    href: params.href ?? "",
+    entityId: params.entityId ?? "",
+    channelId: channelForType(params.type),
+    ...params.pushData,
+  });
+}
+
+export async function notifyFielderInApp(
+  fielderId: string,
+  params: {
+    type: NotificationType;
+    title: string;
+    body: string;
+    href?: string;
+    entityType?: string;
+    entityId?: string;
+    metadata?: Record<string, unknown>;
+    pushData?: Record<string, string>;
+  }
+) {
+  const user = await prisma.user.findFirst({
+    where: { fielderId, isActive: true },
+    select: { id: true },
+  });
+  if (!user) return;
+  await notifyUser({ userId: user.id, ...params });
 }
 
 async function getOfficeUsers(excludeUserId?: string) {
@@ -67,6 +135,7 @@ export async function notifyOfficeUsers(params: {
           type: params.type,
           href: params.href ?? "",
           entityId: params.entityId ?? "",
+          channelId: "operations",
         })
       )
   );

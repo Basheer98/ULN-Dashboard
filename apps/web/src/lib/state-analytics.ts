@@ -3,7 +3,7 @@ import { toNumber, stateName, inDateRange, type DateRange } from "@uln/shared";
 
 export async function getStateAnalytics(stateCode: string, range?: DateRange) {
   const projects = await prisma.project.findMany({
-    where: { state: stateCode },
+    where: { deletedAt: null, state: stateCode },
     include: {
       client: true,
       lineItems: true,

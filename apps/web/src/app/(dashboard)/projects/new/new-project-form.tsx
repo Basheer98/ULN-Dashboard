@@ -35,8 +35,20 @@ export default function NewProjectPage() {
   const [assignedSqft, setAssignedSqft] = useState("");
   const [fielderRateSource, setFielderRateSource] = useState("");
   const [sqft, setSqft] = useState("");
+  const [buriedSqft, setBuriedSqft] = useState("");
+  const [aerialSqft, setAerialSqft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  function applySplit(nextBuried: string, nextAerial: string) {
+    setBuriedSqft(nextBuried);
+    setAerialSqft(nextAerial);
+    const b = Number(nextBuried);
+    const a = Number(nextAerial);
+    if (nextBuried !== "" && nextAerial !== "" && Number.isFinite(b) && Number.isFinite(a)) {
+      setSqft(String(b + a));
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -120,6 +132,8 @@ export default function NewProjectPage() {
       qfield: form.get("qfield") ? Number(form.get("qfield")) : undefined,
       description: form.get("description") || undefined,
       sqft: sqftValue,
+      buriedSqft: buriedSqft === "" ? null : Number(buriedSqft),
+      aerialSqft: aerialSqft === "" ? null : Number(aerialSqft),
       clientSqftRate: clientSqftRate,
       dueDate: form.get("dueDate") || undefined,
       notes: form.get("notes") || undefined,
@@ -221,7 +235,7 @@ export default function NewProjectPage() {
               <p className="mt-1 text-xs text-muted-foreground">Which QField login the project file is uploaded to.</p>
             </div>
             <div>
-              <label className="label">SQFT *</label>
+              <label className="label">Total SQFT *</label>
               <input
                 name="sqft"
                 type="number"
@@ -232,6 +246,36 @@ export default function NewProjectPage() {
                 value={sqft}
                 onChange={(e) => setSqft(e.target.value)}
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Billing uses total SQFT. Optional split below for buried/aerial jobs.
+              </p>
+            </div>
+            <div>
+              <label className="label">Buried SQFT</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full"
+                value={buriedSqft}
+                onChange={(e) => applySplit(e.target.value, aerialSqft)}
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="label">Aerial SQFT</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full"
+                value={aerialSqft}
+                onChange={(e) => applySplit(buriedSqft, e.target.value)}
+                placeholder="Optional"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Filling both auto-sets total (e.g. 15,000 + 5,000 = 20,000).
+              </p>
             </div>
             <div>
               <label className="label">Client Rate ($/SQFT) *</label>

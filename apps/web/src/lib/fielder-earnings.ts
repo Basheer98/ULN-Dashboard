@@ -1,9 +1,17 @@
 import { toNumber } from "@uln/shared";
 
+/** Weekly chart for cash actually received (amountPaid), not full owed. */
 export function buildWeeklyEarnings(
-  payments: { paidAt: Date | null; totalAmount: unknown; status: string }[]
+  payments: {
+    paidAt: Date | null;
+    totalAmount: unknown;
+    amountPaid?: unknown;
+    status: string;
+  }[]
 ) {
-  const paid = payments.filter((p) => p.status === "paid" && p.paidAt);
+  const paid = payments.filter(
+    (p) => (p.status === "paid" || p.status === "partial") && p.paidAt && toNumber(p.amountPaid ?? 0) > 0
+  );
   const weeks: { label: string; amount: number; weekStart: string }[] = [];
   const today = new Date();
 
@@ -26,7 +34,7 @@ export function buildWeeklyEarnings(
         const d = new Date(p.paidAt!);
         return d >= weekStart && d <= weekEndStart;
       })
-      .reduce((s, p) => s + toNumber(p.totalAmount), 0);
+      .reduce((s, p) => s + toNumber(p.amountPaid ?? p.totalAmount), 0);
 
     weeks.push({
       label,

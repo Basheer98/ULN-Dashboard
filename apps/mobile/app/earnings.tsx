@@ -172,7 +172,11 @@ export default function EarningsScreen() {
           ) : (
             month.lines.map((line) => {
               const statusColor = getStatusColor(
-                line.paymentStatus === "paid" ? "paid" : "pending"
+                line.paymentStatus === "paid"
+                  ? "paid"
+                  : line.paymentStatus === "partial"
+                    ? "partial"
+                    : "pending"
               );
               return (
                 <View key={line.projectNumber} style={styles.lineCard}>

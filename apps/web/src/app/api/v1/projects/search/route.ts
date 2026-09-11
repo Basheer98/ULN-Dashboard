@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       const assignments = await prisma.assignment.findMany({
         where: {
           fielderId: user.fielderId,
-          project: searchWhere,
+          project: { ...searchWhere, deletedAt: null },
         },
         orderBy: { assignedAt: "desc" },
         take: 25,
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     const projects = await prisma.project.findMany({
-      where: searchWhere,
+      where: { ...searchWhere, deletedAt: null },
       orderBy: { updatedAt: "desc" },
       take: 25,
       include: {

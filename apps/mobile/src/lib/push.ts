@@ -1,4 +1,5 @@
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import type { Router } from "expo-router";
 import { registerPushToken } from "./api";
@@ -21,12 +22,16 @@ function handleNotificationTap(data: Record<string, unknown> | undefined, router
     router.push("/(tabs)/approvals");
     return;
   }
-  if (type === "payment" || type === "payment_approved" || type === "payment_pending") {
+  if (type === "payment" || type === "payment_approved" || type === "payment_pending" || type === "payment_sent") {
     router.push("/earnings");
     return;
   }
-  if (type.startsWith("expense") || type.startsWith("mileage")) {
-    router.push(type.startsWith("mileage") ? "/mileage" : "/(tabs)/expenses");
+  if (type.startsWith("expense")) {
+    router.push("/(tabs)/expenses");
+    return;
+  }
+  if (type.startsWith("mileage")) {
+    router.push("/mileage");
   }
 }
 
@@ -85,7 +90,13 @@ export async function setupPushNotifications() {
   }
   if (finalStatus !== "granted") return null;
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ??
+    (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
+
+  const tokenData = await Notifications.getExpoPushTokenAsync(
+    projectId ? { projectId } : undefined
+  );
   const pushToken = tokenData.data;
   const authToken = await getToken();
   if (authToken && pushToken) {

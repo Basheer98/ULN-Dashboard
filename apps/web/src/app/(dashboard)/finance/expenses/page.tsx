@@ -72,7 +72,7 @@ export default async function ExpensesPage({
       prisma.fielder.findMany({ orderBy: { lastName: "asc" } }),
       prisma.paymentMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
       prisma.vendor.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-      prisma.project.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
+      prisma.project.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 100 }),
     ]);
 
   const existingForDupes = expensesRaw.map((row) => ({
@@ -177,6 +177,7 @@ export default async function ExpensesPage({
                   <th>Date</th>
                   <th>Number</th>
                   <th>Description</th>
+                  <th>Project</th>
                   <th>Category</th>
                   <th>State</th>
                   <th>Vendor</th>
@@ -217,6 +218,29 @@ export default async function ExpensesPage({
                         </Link>
                       </td>
                       <td>{exp.description || "—"}</td>
+                      <td>
+                        {exp.project ? (
+                          <Link href={`/projects/${exp.projectId}`} className="link">
+                            {exp.project.projectNumber}
+                            {(exp.project.buriedSqft != null ||
+                              exp.project.aerialSqft != null) && (
+                              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                                {exp.project.buriedSqft != null
+                                  ? `Buried ${toNumber(exp.project.buriedSqft).toLocaleString()}`
+                                  : null}
+                                {exp.project.buriedSqft != null && exp.project.aerialSqft != null
+                                  ? " · "
+                                  : null}
+                                {exp.project.aerialSqft != null
+                                  ? `Aerial ${toNumber(exp.project.aerialSqft).toLocaleString()}`
+                                  : null}
+                              </span>
+                            )}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td>{exp.category?.name || "—"}</td>
                       <td>{stateName(exp.workState || exp.project?.state)}</td>
                       <td>{exp.vendor?.name || "—"}</td>

@@ -14,7 +14,10 @@ export async function GET(
     const user = requireAuthUser(await getRequestUser(request));
     const { id: projectId } = await params;
 
-    const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+      select: { id: true },
+    });
     if (!project) return jsonError("Project not found", 404);
     await assertCanAccessProjectFiles(user, projectId);
 
@@ -36,7 +39,9 @@ export async function POST(
     const user = requireAuthUser(await getRequestUser(request));
     const { id: projectId } = await params;
 
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+    });
     if (!project) return jsonError("Project not found", 404);
     await assertCanAccessProjectFiles(user, projectId);
 

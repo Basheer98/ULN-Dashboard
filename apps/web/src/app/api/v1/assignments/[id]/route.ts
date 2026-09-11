@@ -74,6 +74,12 @@ export async function PATCH(
           where: { id: assignment.projectId },
           data: { status: "complete", completedAt: now },
         });
+        try {
+          const { createPaymentsFromProject } = await import("@/lib/finance");
+          await createPaymentsFromProject(assignment.projectId);
+        } catch {
+          // Best-effort
+        }
       }
     }
 

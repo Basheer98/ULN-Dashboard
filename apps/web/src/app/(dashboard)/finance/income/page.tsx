@@ -12,7 +12,7 @@ export default async function IncomePage() {
       include: { client: true, project: true, paymentMethod: true },
     }),
     prisma.client.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.project.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.project.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.paymentMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 

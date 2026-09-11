@@ -12,6 +12,7 @@ import { apiRequest } from "../src/lib/api";
 import { getToken } from "../src/lib/auth";
 import { colors, getStatusColor } from "../src/lib/theme";
 import { fonts } from "../src/lib/fonts";
+import { PendingSyncBanner } from "../src/components/pending-sync-banner";
 
 interface MileageEntry {
   id: string;
@@ -65,6 +66,7 @@ export default function MileageHistoryScreen() {
 
   return (
     <View style={styles.container}>
+      <PendingSyncBanner />
       <FlatList
         data={entries}
         keyExtractor={(item) => item.id}

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       recentProjects,
     ] = await Promise.all([
       prisma.project.count({
-        where: { status: { in: ["assigned", "in_progress"] } },
+        where: { deletedAt: null, status: { in: ["assigned", "in_progress"] } },
       }),
       prisma.assignment.count({
         where: {
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         : Promise.resolve([]),
       canPayments
         ? prisma.fielderPayment.findMany({
-            where: { status: { in: ["pending", "approved"] } },
+            where: { status: { in: ["pending", "approved", "partial"] } },
             orderBy: { createdAt: "desc" },
             include: { fielder: true, project: true },
             take: 20,
@@ -70,7 +70,10 @@ export async function GET(request: NextRequest) {
         where: { userId: user.id, readAt: null },
       }),
       prisma.project.findMany({
-        where: { status: { in: ["assigned", "in_progress", "complete"] } },
+        where: {
+          deletedAt: null,
+          status: { in: ["assigned", "in_progress", "complete"] },
+        },
         orderBy: { updatedAt: "desc" },
         include: {
           client: true,
@@ -79,6 +82,23 @@ export async function GET(request: NextRequest) {
         take: 8,
       }),
     ]);
+
+    const paymentApprovals = pendingPayments
+      .filter(
+        (payment) =>
+          Math.max(0, toNumber(payment.totalAmount) - toNumber(payment.amountPaid)) > 0.001
+      )
+      .map((payment) => ({
+        id: payment.id,
+        type: "payment" as const,
+        title: payment.project?.projectNumber ?? "Fielder payment",
+        subtitle: `${payment.fielder.firstName} ${payment.fielder.lastName}`,
+        amount: Math.max(0, toNumber(payment.totalAmount) - toNumber(payment.amountPaid)),
+        status: payment.status,
+        createdAt: payment.createdAt.toISOString(),
+        category: "Payment",
+        projectNumber: payment.project?.projectNumber ?? null,
+      }));
 
     return jsonOk({
       capabilities: {
@@ -90,7 +110,7 @@ export async function GET(request: NextRequest) {
         completedToday,
         pendingExpenses: pendingExpenses.length,
         pendingMileage: pendingMileage.length,
-        pendingPayments: pendingPayments.length,
+        pendingPayments: paymentApprovals.length,
         unreadNotifications,
       },
       recentProjects: recentProjects.map((project) => ({
@@ -139,17 +159,7 @@ export async function GET(request: NextRequest) {
           startOdometer: entry.startOdometer != null ? toNumber(entry.startOdometer) : null,
           endOdometer: entry.endOdometer != null ? toNumber(entry.endOdometer) : null,
         })),
-        payments: pendingPayments.map((payment) => ({
-          id: payment.id,
-          type: "payment" as const,
-          title: payment.project?.projectNumber ?? "Fielder payment",
-          subtitle: `${payment.fielder.firstName} ${payment.fielder.lastName}`,
-          amount: toNumber(payment.totalAmount),
-          status: payment.status,
-          createdAt: payment.createdAt.toISOString(),
-          category: "Payment",
-          projectNumber: payment.project?.projectNumber ?? null,
-        })),
+        payments: paymentApprovals,
       },
     });
   } catch (error) {

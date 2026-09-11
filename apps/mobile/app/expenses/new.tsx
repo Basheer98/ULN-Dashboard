@@ -18,6 +18,7 @@ import { getToken, getUser } from "../../src/lib/auth";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 import { layout, screenStyles } from "../../src/lib/layout";
+import { looksLikeOfflineError, saveExpenseDraft } from "../../src/lib/offline-queue";
 
 interface Category {
   id: string;
@@ -193,7 +194,15 @@ export default function NewExpenseScreen() {
         Alert.alert("OCR incomplete", ocrError);
       }
     } catch (e) {
-      Alert.alert("Scan issue", e instanceof Error ? e.message : "Could not scan receipt");
+      // Keep local photo so the expense can still be saved offline
+      Alert.alert(
+        "Couldn’t scan right now",
+        looksLikeOfflineError(e)
+          ? "Photo saved on this device. You can still submit or save a draft offline."
+          : e instanceof Error
+            ? e.message
+            : "Could not scan receipt"
+      );
     } finally {
       setScanning(false);
     }
@@ -227,6 +236,43 @@ export default function NewExpenseScreen() {
       setReceiptName(name);
       await scanReceipt(uri, name);
     }
+  }
+
+  async function persistOfflineDraft() {
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0 || !description.trim()) {
+      Alert.alert("Incomplete", "Amount and description are required to save a draft.");
+      return;
+    }
+    if (parsedAmount >= receiptRequiredAbove && !receiptUri) {
+      Alert.alert(
+        "Receipt required",
+        `Attach a receipt photo before saving (required at $${receiptRequiredAbove.toFixed(2)}+).`
+      );
+      return;
+    }
+
+    await saveExpenseDraft({
+      payload: {
+        transactionDate,
+        amount: parsedAmount,
+        description: description.trim(),
+        businessPurpose: businessPurpose.trim() || undefined,
+        categoryId,
+        projectId,
+        paidBy: isOffice && !isReimbursable ? "company" : "employee",
+        isReimbursable,
+        expenseStatus: isOffice ? "approved" : undefined,
+        isOffice,
+      },
+      receiptUri,
+      receiptName,
+    });
+    Alert.alert(
+      "Saved on device",
+      "This expense will sync when you have signal again.",
+      [{ text: "OK", onPress: () => router.back() }]
+    );
   }
 
   async function submitExpense(acknowledgeDuplicate = false) {
@@ -312,6 +358,11 @@ export default function NewExpenseScreen() {
         Alert.alert("Possible duplicate", message, [
           { text: "Cancel", style: "cancel" },
           { text: "Submit anyway", onPress: () => void submitExpense(true) },
+        ]);
+      } else if (looksLikeOfflineError(e)) {
+        Alert.alert("No signal", "Save this expense on your phone and sync later?", [
+          { text: "Cancel", style: "cancel" },
+          { text: "Save offline", onPress: () => void persistOfflineDraft() },
         ]);
       } else {
         Alert.alert("Error", message);
@@ -496,6 +547,13 @@ export default function NewExpenseScreen() {
           </Text>
         )}
       </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.draftBtn}
+        onPress={() => void persistOfflineDraft()}
+        disabled={submitting || scanning}
+      >
+        <Text style={styles.draftBtnText}>Save draft offline</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -608,4 +666,21 @@ const styles = StyleSheet.create({
   },
   submitDisabled: { opacity: 0.6 },
   submitText: { fontFamily: fonts.bold, color: colors.accentForeground, fontSize: 16, lineHeight: 20 },
+  draftBtn: {
+    marginTop: 12,
+    marginBottom: 24,
+    minHeight: layout.buttonMinHeight,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: layout.borderRadiusSm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  draftBtnText: {
+    fontFamily: fonts.semibold,
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 18,
+  },
 });

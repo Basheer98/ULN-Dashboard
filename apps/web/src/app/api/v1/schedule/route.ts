@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
     const projects = await prisma.project.findMany({
       where: {
+        deletedAt: null,
         dueDate: { gte: fromDate, lte: toDate },
         status: { notIn: ["cancelled", "paid"] },
       },

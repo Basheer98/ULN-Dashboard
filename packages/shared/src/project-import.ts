@@ -34,6 +34,8 @@ export interface NormalizedImportRow {
   rowNumber: number;
   projectNumber: string;
   sqft: number;
+  buriedSqft: number | null;
+  aerialSqft: number | null;
   qfield: number | null;
   aerial: boolean;
   dueDate: string | null;
@@ -71,7 +73,11 @@ const TRACKER_HEADER_ALIASES: Record<string, string> = {
   "project number": "projectNumber",
   qfield: "qfield",
   sqft: "sqft",
+  "#": "buriedSqft",
+  buried: "buriedSqft",
+  "buried sqft": "buriedSqft",
   aerial: "aerial",
+  "aerial sqft": "aerial",
   ecd: "ecd",
   address: "address",
   feilder: "fielder",
@@ -424,6 +430,8 @@ function normalizeProjectNumber(value: string): string {
 
 function buildNotes(input: {
   aerial: boolean;
+  aerialSqft: number | null;
+  buriedSqft: number | null;
   rawNotes: string;
   fieldingStatus: string;
   dataStatus: string;
@@ -431,7 +439,14 @@ function buildNotes(input: {
 }): string | null {
   const chunks: string[] = [];
   if (input.rawNotes.trim()) chunks.push(input.rawNotes.trim());
-  if (input.aerial) chunks.push("Aerial: yes");
+  if (input.buriedSqft != null || input.aerialSqft != null) {
+    const parts: string[] = [];
+    if (input.buriedSqft != null) parts.push(`Buried: ${input.buriedSqft.toLocaleString()} SQFT`);
+    if (input.aerialSqft != null) parts.push(`Aerial: ${input.aerialSqft.toLocaleString()} SQFT`);
+    chunks.push(parts.join(" · "));
+  } else if (input.aerial) {
+    chunks.push("Aerial: yes");
+  }
   const meta: string[] = [];
   if (input.fieldingStatus) meta.push(`Fielding: ${input.fieldingStatus}`);
   if (input.dataStatus) meta.push(`Data: ${input.dataStatus}`);
@@ -454,6 +469,8 @@ function normalizeTrackerRow(
       rowNumber,
       projectNumber: "",
       sqft: 0,
+      buriedSqft: null,
+      aerialSqft: null,
       qfield: null,
       aerial: false,
       dueDate: null,
@@ -480,7 +497,26 @@ function normalizeTrackerRow(
 
   const qfield = parseQfield(cell(row, indexByField, "qfield"));
   const aerialRaw = cell(row, indexByField, "aerial");
-  const aerial = aerialRaw === "1" || aerialRaw.toLowerCase() === "yes" || aerialRaw.toLowerCase() === "true";
+  const aerialSqftParsed = parseSqft(aerialRaw);
+  const aerialFlag =
+    aerialRaw === "1" ||
+    aerialRaw.toLowerCase() === "yes" ||
+    aerialRaw.toLowerCase() === "true";
+  // Sheet "Aerial" may be a yes/no flag (0/1) or an aerial SQFT amount (e.g. 5000).
+  const aerialSqft =
+    aerialSqftParsed !== null && aerialSqftParsed > 1
+      ? aerialSqftParsed
+      : aerialFlag
+        ? null
+        : aerialSqftParsed !== null && aerialSqftParsed > 0
+          ? aerialSqftParsed
+          : null;
+  const aerial = aerialFlag || (aerialSqft !== null && aerialSqft > 0);
+
+  const buriedRaw = cell(row, indexByField, "buriedSqft");
+  const buriedSqftParsed = parseSqft(buriedRaw);
+  const buriedSqft =
+    buriedSqftParsed !== null && buriedSqftParsed > 0 ? buriedSqftParsed : null;
 
   const addressParts = parseSiteAddress(cell(row, indexByField, "address"), qfield);
   issues.push(...addressParts.warnings);
@@ -507,6 +543,8 @@ function normalizeTrackerRow(
 
   const notes = buildNotes({
     aerial,
+    aerialSqft,
+    buriedSqft,
     rawNotes: cell(row, indexByField, "notes"),
     fieldingStatus,
     dataStatus,
@@ -519,6 +557,8 @@ function normalizeTrackerRow(
     rowNumber,
     projectNumber,
     sqft: sqft ?? 0,
+    buriedSqft,
+    aerialSqft,
     qfield,
     aerial,
     dueDate,

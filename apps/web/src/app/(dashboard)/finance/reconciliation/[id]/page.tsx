@@ -12,10 +12,13 @@ import { notFound } from "next/navigation";
 
 export default async function ReconciliationDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }) {
   const { id } = await params;
+  const { filter } = await searchParams;
   const reconciliation = await prisma.bankReconciliation.findUnique({
     where: { id },
     include: {
@@ -32,6 +35,22 @@ export default async function ReconciliationDetailPage({
   const difference = toNumber(reconciliation.difference);
   const canEdit =
     reconciliation.status === "in_progress" || reconciliation.status === "balanced";
+
+  const items = reconciliation.items.filter((item) => {
+    if (filter === "cleared") return item.isCleared;
+    if (filter === "uncleared") return !item.isCleared;
+    if (filter === "bank") return item.isManual;
+    if (filter === "ledger") return !item.isManual;
+    return true;
+  });
+
+  const filters = [
+    { key: undefined, label: "All" },
+    { key: "cleared", label: "Cleared" },
+    { key: "uncleared", label: "Uncleared" },
+    { key: "bank", label: "Bank only" },
+    { key: "ledger", label: "Ledger" },
+  ] as const;
 
   return (
     <>
@@ -51,7 +70,20 @@ export default async function ReconciliationDetailPage({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="stat-card sm:col-span-2 lg:col-span-1">
+            <p className="text-sm text-muted-foreground">Difference</p>
+            <p
+              className={`mt-2 text-2xl font-semibold ${
+                Math.abs(difference) > 0.01 ? "text-danger" : "text-success"
+              }`}
+            >
+              {formatCurrency(difference)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {Math.abs(difference) < 0.01 ? "Balanced" : "Starting + cleared − ending"}
+            </p>
+          </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Starting Balance</p>
             <p className="mt-2 text-xl font-semibold">
@@ -78,13 +110,38 @@ export default async function ReconciliationDetailPage({
           </div>
         </div>
 
-        <BankStatementImport reconciliationId={reconciliation.id} disabled={!canEdit} />
+        <BankStatementImport
+          reconciliationId={reconciliation.id}
+          currentEndingBalance={toNumber(reconciliation.endingBalance)}
+          disabled={!canEdit}
+        />
 
         <div className="card overflow-x-auto">
-          <h2 className="mb-4 font-semibold text-foreground">Reconciliation Items</h2>
-          {reconciliation.items.length === 0 ? (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold text-foreground">Reconciliation Items</h2>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {filters.map((f) => {
+                const active = (filter ?? undefined) === f.key;
+                const href = f.key
+                  ? `/finance/reconciliation/${id}?filter=${f.key}`
+                  : `/finance/reconciliation/${id}`;
+                return (
+                  <Link
+                    key={f.label}
+                    href={href}
+                    className={active ? "btn-primary text-xs" : "btn-secondary text-xs"}
+                  >
+                    {f.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+          {items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No items yet. Import a bank statement above, or clear ledger items manually.
+              {reconciliation.items.length === 0
+                ? "No items yet. Import a bank statement above, or clear ledger items manually."
+                : "No items match this filter."}
             </p>
           ) : (
             <table className="data-table">
@@ -99,7 +156,7 @@ export default async function ReconciliationDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {reconciliation.items.map((item) => (
+                {items.map((item) => (
                   <tr key={item.id}>
                     <td>
                       {item.transactionDate?.toLocaleDateString() ??
@@ -107,10 +164,31 @@ export default async function ReconciliationDetailPage({
                         "—"}
                     </td>
                     <td>
-                      {item.description ||
-                        item.transaction?.description ||
-                        item.transaction?.transactionNumber ||
-                        "—"}
+                      {item.transactionId &&
+                      item.transaction?.transactionType === "expense" ? (
+                        <Link
+                          href={`/finance/expenses/${item.transactionId}`}
+                          className="link"
+                        >
+                          {item.description ||
+                            item.transaction?.description ||
+                            item.transaction?.transactionNumber ||
+                            "Ledger transaction"}
+                        </Link>
+                      ) : (
+                        <>
+                          {item.description ||
+                            item.transaction?.description ||
+                            item.transaction?.transactionNumber ||
+                            "—"}
+                          {item.transaction?.transactionNumber &&
+                          item.transaction?.transactionType !== "expense" ? (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {item.transaction.transactionNumber}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                     </td>
                     <td>{formatCurrency(toNumber(item.amount))}</td>
                     <td>

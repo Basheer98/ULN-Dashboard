@@ -13,6 +13,7 @@ export async function getOverdueItems() {
     }),
     prisma.project.findMany({
       where: {
+        deletedAt: null,
         dueDate: { lt: now },
         status: { in: ["draft", "assigned", "in_progress"] },
       },

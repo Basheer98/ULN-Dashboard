@@ -106,7 +106,6 @@ export default function TabsLayout() {
         name="inbox"
         options={{
           title: "Inbox",
-          href: isFielder ? null : undefined,
           tabBarIcon: ({ focused }) =>
             tabIcon(focused ? "notifications" : "notifications-outline", focused),
         }}

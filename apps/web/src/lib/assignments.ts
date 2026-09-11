@@ -8,8 +8,8 @@ export async function assignFielderToProject(
   projectId: string,
   data: AssignmentInput
 ) {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, deletedAt: null },
     include: { assignments: true },
   });
   if (!project) throw new ApiError("Project not found", 404);

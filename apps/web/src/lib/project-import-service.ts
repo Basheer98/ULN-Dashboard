@@ -60,7 +60,7 @@ async function loadFielders() {
 async function loadExistingProjects(numbers: string[]) {
   if (numbers.length === 0) return new Map<string, { id: string; status: ProjectStatus; sqft: Prisma.Decimal }>();
   const projects = await prisma.project.findMany({
-    where: { projectNumber: { in: numbers } },
+    where: { deletedAt: null, projectNumber: { in: numbers } },
     select: { id: true, projectNumber: true, status: true, sqft: true },
   });
   return new Map(projects.map((p) => [p.projectNumber.toLowerCase(), p]));
@@ -225,6 +225,8 @@ function projectDataFromRow(
     zip: row.zip,
     qfield: row.qfield,
     sqft: row.sqft,
+    buriedSqft: row.buriedSqft,
+    aerialSqft: row.aerialSqft,
     clientSqftRate,
     status: row.projectStatus,
     dueDate: row.dueDate ? new Date(row.dueDate) : null,
@@ -327,6 +329,8 @@ export async function executeTrackerImport(
               zip: row.zip,
               qfield: row.qfield,
               sqft: row.sqft,
+              buriedSqft: row.buriedSqft,
+              aerialSqft: row.aerialSqft,
               clientSqftRate: rates.client.clientSqftRate,
               dueDate: row.dueDate ? new Date(row.dueDate) : null,
               notes: row.notes,
@@ -444,7 +448,7 @@ export async function executeLegacyImport(
         where: { projectNumber: row.projectNumber },
       });
 
-      if (existing && !updateExisting) {
+      if (existing && !existing.deletedAt && !updateExisting) {
         skipped++;
         results.push({
           row: row.rowNumber,
@@ -455,7 +459,7 @@ export async function executeLegacyImport(
         continue;
       }
 
-      if (existing && isProtectedStatus(existing.status)) {
+      if (existing && !existing.deletedAt && isProtectedStatus(existing.status)) {
         skipped++;
         results.push({
           row: row.rowNumber,
@@ -477,6 +481,7 @@ export async function executeLegacyImport(
             state: row.state,
             sqft: row.sqft,
             qfield: row.qfield,
+            deletedAt: null,
             clientSqftRate: rates.client.clientSqftRate,
             dueDate: row.ecd ? new Date(row.ecd) : null,
           },

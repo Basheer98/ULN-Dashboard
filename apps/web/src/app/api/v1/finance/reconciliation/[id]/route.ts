@@ -30,6 +30,7 @@ function serializeReconciliation(rec: {
 
 const updateSchema = z.object({
   notes: z.string().optional(),
+  endingBalance: z.coerce.number().optional(),
   items: z
     .array(
       z.object({
@@ -107,16 +108,24 @@ export async function PUT(
       .filter((i) => i.isCleared)
       .reduce((sum, i) => sum + toNumber(i.amount), 0);
 
+    const endingBalance =
+      parsed.data.endingBalance !== undefined
+        ? parsed.data.endingBalance
+        : toNumber(existing.endingBalance);
+
     const difference = calculateReconciliationDifference(
       toNumber(existing.startingBalance),
       clearedTotal,
-      toNumber(existing.endingBalance)
+      endingBalance
     );
 
     const reconciliation = await prisma.bankReconciliation.update({
       where: { id },
       data: {
         ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+        ...(parsed.data.endingBalance !== undefined
+          ? { endingBalance: parsed.data.endingBalance }
+          : {}),
         clearedTotal,
         difference,
         status: difference === 0 ? "balanced" : "in_progress",

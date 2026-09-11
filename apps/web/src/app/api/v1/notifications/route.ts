@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requireUser } from "@/lib/api";
 import { serializeNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requireUser(await getRequestUser(request));
     const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? 30), 50);
 
     const [notifications, unreadCount, openCount] = await Promise.all([
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requireUser(await getRequestUser(request));
     const body = await request.json().catch(() => ({}));
     const action = body.action as string | undefined;
 

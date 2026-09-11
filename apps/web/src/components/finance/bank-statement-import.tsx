@@ -17,6 +17,7 @@ interface PreviewMatch {
 interface PreviewResult {
   format: string;
   parseErrors: string[];
+  suggestedEndingBalance: number | null;
   stats: {
     statementLines: number;
     matched: number;
@@ -30,9 +31,11 @@ interface PreviewResult {
 
 export function BankStatementImport({
   reconciliationId,
+  currentEndingBalance,
   disabled,
 }: {
   reconciliationId: string;
+  currentEndingBalance?: number;
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -78,6 +81,27 @@ export function BankStatementImport({
     setPreview(data);
   }
 
+  async function applySuggestedEnding() {
+    if (preview?.suggestedEndingBalance == null) return;
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/v1/finance/reconciliation/${reconciliationId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endingBalance: preview.suggestedEndingBalance }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(data.error ?? "Could not update ending balance");
+      return;
+    }
+    setMessage(
+      `Ending balance set to ${formatCurrency(preview.suggestedEndingBalance)} from statement`
+    );
+    router.refresh();
+  }
+
   async function applyImport() {
     if (!text.trim()) return;
     setLoading(true);
@@ -110,6 +134,12 @@ export function BankStatementImport({
   }
 
   if (disabled) return null;
+
+  const suggested = preview?.suggestedEndingBalance;
+  const endingDiffers =
+    suggested != null &&
+    currentEndingBalance != null &&
+    Math.abs(suggested - currentEndingBalance) > 0.01;
 
   return (
     <div className="card space-y-4">
@@ -187,6 +217,30 @@ export function BankStatementImport({
               weak
             </span>
           </div>
+          {suggested != null && (
+            <div className="flex flex-wrap items-center gap-3 rounded border border-border bg-muted/20 px-3 py-2 text-sm">
+              <span>
+                Statement ending balance:{" "}
+                <span className="font-medium">{formatCurrency(suggested)}</span>
+                {currentEndingBalance != null && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    (current recon: {formatCurrency(currentEndingBalance)})
+                  </span>
+                )}
+              </span>
+              {endingDiffers && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={applySuggestedEnding}
+                  className="btn-secondary text-xs"
+                >
+                  Use statement ending
+                </button>
+              )}
+            </div>
+          )}
           {preview.parseErrors.length > 0 && (
             <ul className="text-xs text-warning">
               {preview.parseErrors.slice(0, 5).map((e) => (

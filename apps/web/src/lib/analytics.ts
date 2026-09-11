@@ -66,6 +66,7 @@ export async function getDashboardAnalytics(
 ): Promise<DashboardAnalytics> {
   const [projects, fielders] = await Promise.all([
     prisma.project.findMany({
+      where: { deletedAt: null },
       include: {
         client: true,
         lineItems: true,
@@ -238,7 +239,7 @@ export async function getFielderAnalytics(fielderId: string, range?: DateRange) 
 
 export async function getClientAnalytics(clientId: string, range?: DateRange) {
   const projects = await prisma.project.findMany({
-    where: { clientId },
+    where: { deletedAt: null, clientId },
     include: { lineItems: true },
   });
 

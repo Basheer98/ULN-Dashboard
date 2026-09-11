@@ -75,7 +75,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL,
     eas: {
+      // Required for production Expo push tokens. Set via `eas init` or EAS_PROJECT_ID.
       projectId: process.env.EAS_PROJECT_ID,
     },
   },
+  // Privacy policy URL for store listings (update when live)
+  // privacy: "https://urbanlinknetworks.com/privacy",
 });

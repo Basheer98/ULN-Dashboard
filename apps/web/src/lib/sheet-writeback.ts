@@ -22,8 +22,8 @@ export async function syncProjectsToGoogleSheet(
 
   const projects = await prisma.project.findMany({
     where: projectNumbers?.length
-      ? { projectNumber: { in: projectNumbers } }
-      : undefined,
+      ? { deletedAt: null, projectNumber: { in: projectNumbers } }
+      : { deletedAt: null },
     select: {
       projectNumber: true,
       sqft: true,
