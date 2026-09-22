@@ -1,4 +1,5 @@
 import { Header } from "@/components/layout";
+import { ProjectTitlesManager } from "@/components/project-titles-manager";
 import { StateRatesManager } from "@/components/state-rates-manager";
 import { getSessionUser } from "@/lib/auth";
 import { hasPermission } from "@uln/shared";
@@ -10,14 +11,18 @@ export default async function RatesPage() {
     redirect("/dashboard");
   }
 
+  const canEditRates = hasPermission(user.role, "rates:write");
+  const canEditTitles = hasPermission(user.role, "projects:write");
+
   return (
     <>
       <Header
         title="Rates"
-        subtitle="Company defaults and per-state SQFT rate overrides"
+        subtitle="Company defaults, state overrides, and project title catalog"
       />
-      <main className="page-main">
-        <StateRatesManager canEdit={hasPermission(user.role, "rates:write")} />
+      <main className="page-main space-y-8">
+        <StateRatesManager canEdit={canEditRates} />
+        <ProjectTitlesManager canEdit={canEditTitles} />
       </main>
     </>
   );

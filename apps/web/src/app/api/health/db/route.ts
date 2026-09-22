@@ -1,9 +1,12 @@
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { jsonOk } from "@/lib/api";
+import { jsonOk, jsonError } from "@/lib/api";
+import { ensureProductionSchema } from "@/lib/ensure-schema";
 
 /**
  * Schema probe for production debugging.
- * GET /api/health/db — no auth (safe: only returns boolean checks, no data).
+ * GET  /api/health/db
+ * POST /api/health/db  — runs idempotent schema repair (no auth; only DDL IF NOT EXISTS)
  */
 export async function GET() {
   const checks: Record<string, { ok: boolean; error?: string }> = {};
@@ -48,10 +51,34 @@ export async function GET() {
       status: ok ? "ok" : "schema_mismatch",
       hint: ok
         ? undefined
-        : "Run: npm run db:migrate:deploy (Railway → service → Shell, or ensure startCommand includes migrate)",
+        : "POST /api/health/db to auto-repair, or run: npm run db:migrate:deploy",
       checks,
       timestamp: new Date().toISOString(),
     },
     ok ? 200 : 503
   );
+}
+
+export async function POST(_request: NextRequest) {
+  const result = await ensureProductionSchema();
+  if (!result.ok) {
+    return jsonError(`Schema repair failed: ${result.steps.join(" | ")}`, 500);
+  }
+
+  // Re-probe after repair
+  try {
+    await prisma.project.count({ where: { deletedAt: null } });
+    await prisma.fielderPayment.findFirst({ select: { amountPaid: true } });
+  } catch (err) {
+    return jsonError(
+      err instanceof Error ? err.message : "Repair ran but probes still failing",
+      500
+    );
+  }
+
+  return jsonOk({
+    status: "repaired",
+    steps: result.steps,
+    timestamp: new Date().toISOString(),
+  });
 }

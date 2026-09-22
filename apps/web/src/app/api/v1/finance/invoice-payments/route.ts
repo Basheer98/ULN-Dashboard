@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
     }
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: parsed.data.invoiceId },
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: parsed.data.invoiceId, deletedAt: null },
       include: { invoicePayments: true, client: true, project: true },
     });
     if (!invoice) return jsonError("Invoice not found", 404);

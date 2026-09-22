@@ -36,7 +36,12 @@ export default async function FielderStatementPage({
 
   return (
     <>
-      <Header title="Fielder Statement" subtitle={`${fielder.firstName} ${fielder.lastName} — ${monthLabel}`} />
+      <Header
+        title="Fielder Statement"
+        subtitle={`${fielder.firstName} ${fielder.lastName} — ${monthLabel}`}
+        backHref={`/fielders/${id}`}
+        backLabel="Back to fielder"
+      />
       <main className="page-main space-y-6">
         <StatementControls
           fielderId={id}

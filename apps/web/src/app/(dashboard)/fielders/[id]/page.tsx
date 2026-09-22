@@ -1,8 +1,10 @@
 import { Header, StatusBadge } from "@/components/layout";
+import { FielderDeleteButton } from "@/components/fielder-delete-button";
 import { FielderEditForm } from "@/components/fielder-edit-form";
 import { prisma } from "@/lib/prisma";
 import { getFielderAnalytics } from "@/lib/analytics";
-import { formatCurrency, formatRate, toNumber } from "@uln/shared";
+import { formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
+import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -12,6 +14,9 @@ export default async function FielderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await getSessionUser();
+  const canWrite = user ? hasPermission(user.role, "fielders:write") : false;
+
   const fielder = await prisma.fielder.findUnique({
     where: { id },
     include: {
@@ -30,9 +35,14 @@ export default async function FielderDetailPage({
 
   return (
     <>
-      <Header title={`${fielder.firstName} ${fielder.lastName}`} subtitle="Fielder dashboard" />
+      <Header
+        title={`${fielder.firstName} ${fielder.lastName}`}
+        subtitle={fielder.isActive ? "Fielder dashboard" : "Inactive fielder"}
+        backHref="/fielders"
+        backLabel="Back to fielders"
+      />
       <main className="page-main space-y-6">
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <Link href={`/fielders/${id}/statement`} className="btn-primary text-sm">
             Payment statement
           </Link>
@@ -49,6 +59,13 @@ export default async function FielderDetailPage({
               isActive: fielder.isActive,
             }}
           />
+          {canWrite && (
+            <FielderDeleteButton
+              fielderId={fielder.id}
+              fielderName={`${fielder.firstName} ${fielder.lastName}`}
+              isActive={fielder.isActive}
+            />
+          )}
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="stat-card">

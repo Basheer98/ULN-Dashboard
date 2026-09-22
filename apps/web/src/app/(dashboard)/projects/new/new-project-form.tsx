@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout";
+import { ProjectTitleField } from "@/components/project-title-field";
 import { DEFAULT_CLIENT_SQFT_RATE, US_STATES } from "@uln/shared";
 
 interface ClientOption {
@@ -166,7 +167,12 @@ export default function NewProjectPage() {
 
   return (
     <>
-      <Header title="New Project" subtitle="Create a project with SQFT billing" />
+      <Header
+        title="New Project"
+        subtitle="Create a project with SQFT billing"
+        backHref="/projects"
+        backLabel="Back to projects"
+      />
       <main className="page-main">
         <form onSubmit={handleSubmit} className="card mx-auto max-w-3xl space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -193,8 +199,7 @@ export default function NewProjectPage() {
               </p>
             </div>
             <div className="sm:col-span-2">
-              <label className="label">Project Title *</label>
-              <input name="title" required className="w-full" />
+              <ProjectTitleField name="title" required />
             </div>
             <div className="sm:col-span-2">
               <label className="label">Site Address *</label>
@@ -385,7 +390,11 @@ export default function NewProjectPage() {
                   ? "Create & Assign Fielder"
                   : "Create Project"}
             </button>
-            <button type="button" onClick={() => router.back()} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => router.push("/projects")}
+              className="btn-secondary"
+            >
               Cancel
             </button>
           </div>

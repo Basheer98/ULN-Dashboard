@@ -151,6 +151,17 @@ model StateRate {
   @@map("state_rates")
 }
 
+model ProjectTitle {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("project_titles")
+}
+
 model Project {
   id             String        @id @default(cuid())
   projectNumber  String        @unique @map("project_number")
@@ -243,11 +254,13 @@ model Invoice {
   notes           String?
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
 
   invoicePayments InvoicePayment[]
   financeTransactions FinancialTransaction[]
 
   @@index([status, dueAt])
+  @@index([deletedAt])
   @@map("invoices")
 }
 

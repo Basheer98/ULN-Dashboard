@@ -6,7 +6,7 @@ import { notifyPaymentPending } from "./push";
 export async function createInvoiceFromProject(projectId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, deletedAt: null },
-    include: { client: true, lineItems: true, invoices: true },
+    include: { client: true, lineItems: true, invoices: { where: { deletedAt: null } } },
   });
   if (!project) {
     throw new Error("Project not found");
@@ -16,7 +16,7 @@ export async function createInvoiceFromProject(projectId: string) {
     throw new Error("Project must be complete before generating an invoice");
   }
 
-  const existingDraft = project.invoices.find((i) => i.status === "draft");
+  const existingDraft = project.invoices.find((i) => !i.deletedAt && i.status === "draft");
   if (existingDraft) return existingDraft;
 
   const sqft = toNumber(project.sqft);
@@ -115,9 +115,49 @@ export async function markOverdueInvoices() {
   const now = new Date();
   await prisma.invoice.updateMany({
     where: {
+      deletedAt: null,
       status: { in: ["sent", "partial"] },
       dueAt: { lt: now },
     },
     data: { status: "overdue" },
   });
+}
+
+/** Soft-delete invoice. Reverts project to complete when it was only invoiced via this invoice. */
+export async function softDeleteInvoice(invoiceId: string) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, deletedAt: null },
+  });
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  const deleted = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { deletedAt: new Date() },
+    include: { client: true, project: true },
+  });
+
+  if (invoice.status !== "paid") {
+    const remaining = await prisma.invoice.count({
+      where: {
+        projectId: invoice.projectId,
+        deletedAt: null,
+        id: { not: invoiceId },
+      },
+    });
+    if (remaining === 0) {
+      const project = await prisma.project.findFirst({
+        where: { id: invoice.projectId, deletedAt: null },
+      });
+      if (project?.status === "invoiced") {
+        await prisma.project.update({
+          where: { id: invoice.projectId },
+          data: { status: "complete" },
+        });
+      }
+    }
+  }
+
+  return deleted;
 }

@@ -7,7 +7,7 @@ export async function getOverdueItems() {
 
   const [overdueInvoices, overdueProjects] = await Promise.all([
     prisma.invoice.findMany({
-      where: { status: "overdue" },
+      where: { status: "overdue", deletedAt: null },
       include: { client: true, project: true },
       orderBy: { dueAt: "asc" },
     }),

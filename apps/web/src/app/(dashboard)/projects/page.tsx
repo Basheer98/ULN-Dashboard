@@ -1,16 +1,33 @@
-import { Header, StatusBadge } from "@/components/layout";
+import { Header } from "@/components/layout";
 import { ProjectsFilter } from "@/components/projects-filter";
+import { ProjectsTable, type ProjectRow } from "@/components/projects-table";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, toNumber, stateName, hasPermission } from "@uln/shared";
+import { toNumber, stateName, hasPermission } from "@uln/shared";
 import type { Prisma, ProjectStatus } from "@uln/database";
 import Link from "next/link";
 import { buildProjectSearchWhere } from "@/lib/project-search";
 import { getSessionUser } from "@/lib/auth";
 
+function dayStart(iso: string) {
+  return new Date(`${iso}T00:00:00`);
+}
+
+function dayEnd(iso: string) {
+  return new Date(`${iso}T23:59:59.999`);
+}
+
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string; status?: string; qfield?: string; q?: string }>;
+  searchParams: Promise<{
+    state?: string;
+    status?: string;
+    qfield?: string;
+    q?: string;
+    title?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const params = await searchParams;
   const user = await getSessionUser();
@@ -20,8 +37,25 @@ export default async function ProjectsPage({
   if (params.state) where.state = params.state;
   if (params.status) where.status = params.status as ProjectStatus;
   if (params.qfield) where.qfield = Number(params.qfield);
+  if (params.title?.trim()) {
+    where.title = { equals: params.title.trim(), mode: "insensitive" };
+  }
   if (params.q?.trim()) {
     Object.assign(where, buildProjectSearchWhere(params.q));
+  }
+  if (params.from || params.to) {
+    const range: Prisma.DateTimeFilter = {};
+    if (params.from) range.gte = dayStart(params.from);
+    if (params.to) range.lte = dayEnd(params.to);
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        OR: [
+          { dueDate: range },
+          { dueDate: null, createdAt: range },
+        ],
+      },
+    ];
   }
 
   const projects = await prisma.project.findMany({
@@ -31,6 +65,25 @@ export default async function ProjectsPage({
       client: true,
       assignments: { include: { fielder: true } },
     },
+  });
+
+  const rows: ProjectRow[] = projects.map((project) => {
+    const fielder = project.assignments[0]?.fielder;
+    return {
+      id: project.id,
+      projectNumber: project.projectNumber,
+      title: project.title,
+      clientName: project.client.name,
+      state: stateName(project.state),
+      qfield: project.qfield,
+      sqft: toNumber(project.sqft),
+      buriedSqft: project.buriedSqft != null ? toNumber(project.buriedSqft) : null,
+      aerialSqft: project.aerialSqft != null ? toNumber(project.aerialSqft) : null,
+      clientBill: toNumber(project.sqft) * toNumber(project.clientSqftRate),
+      dueDate: project.dueDate?.toISOString() ?? null,
+      fielderName: fielder ? `${fielder.firstName} ${fielder.lastName}` : null,
+      status: project.status,
+    };
   });
 
   return (
@@ -53,68 +106,7 @@ export default async function ProjectsPage({
             </div>
           )}
         </div>
-        <div className="card overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th>Client</th>
-                <th>State</th>
-                <th>QField</th>
-                <th>SQFT</th>
-                <th>Client Bill</th>
-                <th>ECD</th>
-                <th>Fielder</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="text-center text-sm text-muted-foreground">
-                    No projects match these filters.
-                  </td>
-                </tr>
-              ) : (
-                projects.map((project) => {
-                  const bill = toNumber(project.sqft) * toNumber(project.clientSqftRate);
-                  const fielder = project.assignments[0]?.fielder;
-                  return (
-                    <tr key={project.id}>
-                      <td>
-                        <Link href={`/projects/${project.id}`} className="link">
-                          {project.projectNumber}
-                        </Link>
-                        <p className="text-xs text-muted-foreground">{project.title}</p>
-                      </td>
-                      <td>{project.client.name}</td>
-                      <td>{stateName(project.state)}</td>
-                      <td>{project.qfield ? `QField ${project.qfield}` : "—"}</td>
-                      <td>
-                        {toNumber(project.sqft).toLocaleString()}
-                        {(project.buriedSqft != null || project.aerialSqft != null) && (
-                          <p className="text-xs text-muted-foreground">
-                            {project.buriedSqft != null
-                              ? `B ${toNumber(project.buriedSqft).toLocaleString()}`
-                              : null}
-                            {project.buriedSqft != null && project.aerialSqft != null ? " · " : null}
-                            {project.aerialSqft != null
-                              ? `A ${toNumber(project.aerialSqft).toLocaleString()}`
-                              : null}
-                          </p>
-                        )}
-                      </td>
-                      <td>{formatCurrency(bill)}</td>
-                      <td>{project.dueDate ? project.dueDate.toLocaleDateString() : "—"}</td>
-                      <td>{fielder ? `${fielder.firstName} ${fielder.lastName}` : "—"}</td>
-                      <td><StatusBadge status={project.status} /></td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ProjectsTable projects={rows} />
       </main>
     </>
   );

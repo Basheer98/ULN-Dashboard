@@ -104,7 +104,17 @@ export function Sidebar({
   );
 }
 
-export function Header({ title, subtitle }: { title: string; subtitle?: string }) {
+export function Header({
+  title,
+  subtitle,
+  backHref,
+  backLabel,
+}: {
+  title: string;
+  subtitle?: string;
+  backHref?: string;
+  backLabel?: string;
+}) {
   const router = useRouter();
   const mobileNav = useMobileNav();
 
@@ -129,6 +139,14 @@ export function Header({ title, subtitle }: { title: string; subtitle?: string }
             </button>
           )}
           <div className="min-w-0">
+            {backHref ? (
+              <Link
+                href={backHref}
+                className="mb-1 inline-flex items-center text-sm text-muted-foreground transition hover:text-accent"
+              >
+                ← {backLabel ?? "Back"}
+              </Link>
+            ) : null}
             <h1 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl lg:text-2xl">
               {title}
             </h1>

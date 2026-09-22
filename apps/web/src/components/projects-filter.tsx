@@ -18,10 +18,20 @@ export function ProjectsFilter() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [titles, setTitles] = useState<string[]>([]);
 
   useEffect(() => {
     setSearch(searchParams.get("q") ?? "");
   }, [searchParams]);
+
+  useEffect(() => {
+    fetch("/api/v1/projects/titles")
+      .then((r) => r.json())
+      .then((data) => {
+        setTitles(Array.isArray(data.titles) ? data.titles : []);
+      })
+      .catch(() => setTitles([]));
+  }, []);
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -37,6 +47,7 @@ export function ProjectsFilter() {
       setParam("q", search);
     }, 300);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setParam reads latest searchParams
   }, [search, searchParams]);
 
   return (
@@ -46,9 +57,22 @@ export function ProjectsFilter() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search project #, title, client, address..."
-        className="w-full sm:min-w-[240px] sm:flex-1"
+        className="w-full sm:min-w-[200px] sm:flex-1"
         aria-label="Search projects"
       />
+      <select
+        value={searchParams.get("title") ?? ""}
+        onChange={(e) => setParam("title", e.target.value)}
+        className="w-full sm:w-auto sm:min-w-[160px]"
+        aria-label="Filter by project title"
+      >
+        <option value="">All titles</option>
+        {titles.map((t) => (
+          <option key={t} value={t}>
+            {t}
+          </option>
+        ))}
+      </select>
       <select
         value={searchParams.get("state") ?? ""}
         onChange={(e) => setParam("state", e.target.value)}
@@ -78,6 +102,22 @@ export function ProjectsFilter() {
         <option value="1">QField 1</option>
         <option value="2">QField 2</option>
       </select>
+      <input
+        type="date"
+        value={searchParams.get("from") ?? ""}
+        onChange={(e) => setParam("from", e.target.value)}
+        className="w-full sm:w-auto"
+        aria-label="From date"
+        title="From date (due date, or created if no due)"
+      />
+      <input
+        type="date"
+        value={searchParams.get("to") ?? ""}
+        onChange={(e) => setParam("to", e.target.value)}
+        className="w-full sm:w-auto"
+        aria-label="To date"
+        title="To date (due date, or created if no due)"
+      />
     </div>
   );
 }

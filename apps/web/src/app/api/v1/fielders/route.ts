@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     requireOfficeUser(await getRequestUser(request));
 
     const fielders = await prisma.fielder.findMany({
+      where: { isActive: true },
       orderBy: { lastName: "asc" },
       include: { user: { select: { email: true } } },
     });

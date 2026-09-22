@@ -211,7 +211,7 @@ export async function generateFinanceReport(type: FinanceReportType, range: Date
     }
     case "outstanding-invoices": {
       const invoices = await prisma.invoice.findMany({
-        where: { status: { in: ["sent", "partial", "overdue"] } },
+        where: { deletedAt: null, status: { in: ["sent", "partial", "overdue"] } },
         include: { client: true, project: true, invoicePayments: true },
         orderBy: { dueAt: "asc" },
       });

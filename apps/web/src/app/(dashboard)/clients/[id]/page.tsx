@@ -1,8 +1,10 @@
 import { Header, StatusBadge } from "@/components/layout";
+import { ClientDeleteButton } from "@/components/client-delete-button";
 import { ClientEditForm } from "@/components/client-edit-form";
 import { prisma } from "@/lib/prisma";
 import { getClientAnalytics } from "@/lib/analytics";
-import { formatCurrency, formatRate, toNumber } from "@uln/shared";
+import { formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
+import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -12,11 +14,14 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await getSessionUser();
+  const canWrite = user ? hasPermission(user.role, "clients:write") : false;
+
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
       projects: { orderBy: { createdAt: "desc" }, include: { assignments: true } },
-      invoices: { orderBy: { createdAt: "desc" }, take: 5 },
+      invoices: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
 
@@ -26,21 +31,35 @@ export default async function ClientDetailPage({
 
   return (
     <>
-      <Header title={client.name} subtitle="Client dashboard" />
+      <Header
+        title={client.name}
+        subtitle={client.isActive ? "Client dashboard" : "Inactive client"}
+        backHref="/clients"
+        backLabel="Back to clients"
+      />
       <main className="page-main space-y-6">
-        <ClientEditForm
-          client={{
-            id: client.id,
-            name: client.name,
-            contactName: client.contactName,
-            email: client.email,
-            phone: client.phone,
-            defaultSqftRate: toNumber(client.defaultSqftRate),
-            billingTerms: client.billingTerms,
-            notes: client.notes,
-            isActive: client.isActive,
-          }}
-        />
+        <div className="flex flex-wrap items-start gap-3">
+          <ClientEditForm
+            client={{
+              id: client.id,
+              name: client.name,
+              contactName: client.contactName,
+              email: client.email,
+              phone: client.phone,
+              defaultSqftRate: toNumber(client.defaultSqftRate),
+              billingTerms: client.billingTerms,
+              notes: client.notes,
+              isActive: client.isActive,
+            }}
+          />
+          {canWrite && (
+            <ClientDeleteButton
+              clientId={client.id}
+              clientName={client.name}
+              isActive={client.isActive}
+            />
+          )}
+        </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Total SQFT</p>

@@ -8,7 +8,7 @@ import Link from "next/link";
 export default async function FinancePaymentsPage() {
   const [invoices, paymentMethods, recentPayments] = await Promise.all([
     prisma.invoice.findMany({
-      where: { status: { in: ["sent", "partial", "overdue"] } },
+      where: { deletedAt: null, status: { in: ["sent", "partial", "overdue"] } },
       orderBy: { dueAt: "asc" },
       include: {
         client: true,

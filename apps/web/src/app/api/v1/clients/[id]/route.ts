@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { clientSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
 import { serializeProject } from "@/lib/projects";
 
 export async function GET(
@@ -38,6 +38,32 @@ export async function PATCH(
     const client = await prisma.client.update({
       where: { id },
       data: parsed.data,
+    });
+
+    return jsonOk(serializeProject(client));
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+/** Soft-delete: marks client inactive so it no longer appears in pickers. Projects/invoices stay. */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requirePermission(await getRequestUser(request), "clients:write");
+    const { id } = await params;
+
+    const existing = await prisma.client.findUnique({ where: { id } });
+    if (!existing) return jsonError("Client not found", 404);
+    if (!existing.isActive) {
+      return jsonOk(serializeProject(existing));
+    }
+
+    const client = await prisma.client.update({
+      where: { id },
+      data: { isActive: false },
     });
 
     return jsonOk(serializeProject(client));

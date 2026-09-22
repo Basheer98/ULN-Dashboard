@@ -3,6 +3,6 @@ builder = "nixpacks"
 
 [deploy]
 preDeployCommand = "npm run db:migrate:deploy"
-startCommand = "npm run db:migrate:deploy && npm run start --workspace=@uln/web"
+startCommand = "bash scripts/railway-start.sh"
 healthcheckPath = "/api/health"
 restartPolicyType = "on_failure"

@@ -10,6 +10,7 @@ import { getProjectFinancials, serializeProject } from "@/lib/projects";
 import { getEntityActivity } from "@/lib/activity-log";
 import { getSessionUser } from "@/lib/auth";
 import { formatCurrency, hasPermission, toNumber } from "@uln/shared";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 export default async function ProjectDetailPage({
@@ -69,7 +70,12 @@ export default async function ProjectDetailPage({
 
   return (
     <>
-      <Header title={project.projectNumber} subtitle={project.title} />
+      <Header
+        title={project.projectNumber}
+        subtitle={project.title}
+        backHref="/projects"
+        backLabel="Back to projects"
+      />
       <main className="page-main space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={project.status} />
@@ -81,7 +87,10 @@ export default async function ProjectDetailPage({
             </>
           )}
           {canWrite && (
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <Link href="/projects/new" className="btn-secondary text-sm">
+                New project
+              </Link>
               <ProjectDeleteButton
                 projectId={project.id}
                 projectNumber={project.projectNumber}

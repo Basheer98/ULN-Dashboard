@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
 import { serializeProject } from "@/lib/projects";
+import { softDeleteInvoice } from "@/lib/finance";
 
 const updateSchema = z.object({
   status: z.enum(["draft", "sent", "partial", "paid", "overdue"]).optional(),
@@ -22,19 +23,19 @@ export async function PATCH(
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return jsonError("Invalid input", 400);
 
+    const existing = await prisma.invoice.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) return jsonError("Invoice not found", 404);
+
     const data: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.status === "sent" && !data.issuedAt) {
       data.issuedAt = new Date();
     }
     if (parsed.data.status === "paid") {
       data.paidAt = parsed.data.paidAt ? new Date(parsed.data.paidAt) : new Date();
-      const existing = await prisma.invoice.findUnique({ where: { id } });
-      if (existing) {
-        await prisma.project.update({
-          where: { id: existing.projectId },
-          data: { status: "paid" },
-        });
-      }
+      await prisma.project.update({
+        where: { id: existing.projectId },
+        data: { status: "paid" },
+      });
     }
     if (parsed.data.paidAt) data.paidAt = new Date(parsed.data.paidAt);
 
@@ -45,6 +46,28 @@ export async function PATCH(
     });
 
     return jsonOk(serializeProject(invoice));
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requirePermission(await getRequestUser(request), "invoices:write");
+    const { id } = await params;
+
+    try {
+      const invoice = await softDeleteInvoice(id);
+      return jsonOk(serializeProject(invoice));
+    } catch (err) {
+      if (err instanceof Error && err.message === "Invoice not found") {
+        return jsonError("Invoice not found", 404);
+      }
+      throw err;
+    }
   } catch (error) {
     return handleApiError(error);
   }

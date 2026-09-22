@@ -83,7 +83,7 @@ export async function getFinanceDashboardStats(startDate?: Date, endDate?: Date)
   });
 
   const outstandingInvoices = await prisma.invoice.findMany({
-    where: { status: { in: ["sent", "partial", "overdue"] } },
+    where: { deletedAt: null, status: { in: ["sent", "partial", "overdue"] } },
     include: { invoicePayments: { include: { transaction: true } } },
   });
 
@@ -129,7 +129,7 @@ export async function getProjectProfitability(projectId: string) {
     where: { id: projectId },
     include: {
       client: true,
-      invoices: { include: { invoicePayments: true } },
+      invoices: { where: { deletedAt: null }, include: { invoicePayments: true } },
       financeTransactions: { where: { deletedAt: null, transactionType: "expense" } },
       expenseAllocations: { include: { transaction: true } },
     },
@@ -208,6 +208,7 @@ export async function getStateProfitability(options?: {
       where: { deletedAt: null, state: { not: null } },
       include: {
         invoices: {
+          where: { deletedAt: null },
           include: {
             invoicePayments: {
               ...(dateFilter ? { where: { paidAt: dateFilter } } : {}),

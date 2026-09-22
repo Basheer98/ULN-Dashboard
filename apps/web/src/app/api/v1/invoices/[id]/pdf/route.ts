@@ -13,8 +13,8 @@ export async function GET(
     requirePermission(await getRequestUser(request), "invoices:read");
     const { id } = await params;
 
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
+    const invoice = await prisma.invoice.findFirst({
+      where: { id, deletedAt: null },
       include: {
         client: true,
         project: { include: { lineItems: { where: { type: "client_billing" } } } },

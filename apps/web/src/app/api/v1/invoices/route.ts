@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     requirePermission(await getRequestUser(request), "invoices:read");
     const invoices = await prisma.invoice.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       include: { client: true, project: true },
     });

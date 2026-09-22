@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     }),
     prisma.project.count({ where: { deletedAt: null, status: "complete" } }),
     prisma.fielderPayment.count({ where: { status: { in: ["pending", "approved"] } } }),
-    prisma.invoice.count({ where: { status: { in: ["sent", "overdue", "partial"] } } }),
+    prisma.invoice.count({ where: { deletedAt: null, status: { in: ["sent", "overdue", "partial"] } } }),
     prisma.project.findMany({
       where: { deletedAt: null },
       take: 5,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { US_STATES } from "@uln/shared";
+import { ProjectTitleField } from "@/components/project-title-field";
 
 interface ClientOption {
   id: string;
@@ -153,8 +154,7 @@ export function ProjectEditForm({ project }: { project: ProjectEditValues }) {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="label">Project Title *</label>
-          <input name="title" required defaultValue={project.title} className="w-full" />
+          <ProjectTitleField name="title" required defaultValue={project.title} />
         </div>
         <div className="sm:col-span-2">
           <label className="label">Site Address *</label>

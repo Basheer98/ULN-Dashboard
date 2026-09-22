@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     const invoices = await prisma.invoice.findMany({
       include: { client: true },
-      where: { status: { not: "draft" } },
+      where: { deletedAt: null, status: { not: "draft" } },
     });
     const filtered = invoices.filter((i) =>
       inDateRange(new Date(i.issuedAt ?? i.createdAt), range)
