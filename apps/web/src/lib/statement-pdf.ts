@@ -18,7 +18,12 @@ function sqftLabel(l: {
 }
 
 export function generateStatementPdf(statement: FielderStatement): Buffer {
-  const rows = statement.lines.map((l) => [
+  const sectionOrder = [
+    ...statement.sections.active,
+    ...statement.sections.pending,
+    ...statement.sections.paid,
+  ];
+  const rows = (sectionOrder.length ? sectionOrder : statement.lines).map((l) => [
     l.projectNumber,
     l.state ?? "",
     sqftLabel(l),
@@ -28,7 +33,7 @@ export function generateStatementPdf(statement: FielderStatement): Buffer {
     formatCurrency(l.total),
     formatCurrency(l.amountPaid),
     formatCurrency(l.amountOwed),
-    l.paymentStatus,
+    `${l.bucket} · ${l.paymentStatus}`,
   ]);
 
   rows.push([
@@ -44,7 +49,7 @@ export function generateStatementPdf(statement: FielderStatement): Buffer {
     "",
   ]);
 
-  const title = `Fielder Statement — ${statement.fielder.firstName} ${statement.fielder.lastName} — ${statement.monthLabel} (${statement.fielder.employmentType === "w2" ? "W-2" : "1099"})`;
+  const title = `Fielder Statement — ${statement.fielder.firstName} ${statement.fielder.lastName} — ${statement.monthLabel} (${statement.fielder.employmentType === "w2" ? "W-2" : "1099"}) · Active ${statement.totals.activeCount} · Pending ${statement.totals.pendingCount} · Paid ${statement.totals.paidCount}`;
 
   return generateReportPdf(title, rows, [
     "Project",

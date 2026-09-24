@@ -68,6 +68,10 @@ export function StatementControls({
     setRange(toIsoDate(start), toIsoDate(end));
   }
 
+  function useAllTime() {
+    setRange("2020-01-01", toIsoDate(new Date()));
+  }
+
   async function emailStatement() {
     setEmailing(true);
     setError(null);
@@ -86,7 +90,7 @@ export function StatementControls({
 
   return (
     <div className="space-y-3 print:hidden">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">Month</label>
           <input
@@ -119,28 +123,33 @@ export function StatementControls({
             }}
           />
         </div>
-        <button type="button" onClick={useThisMonth} className="btn-secondary text-xs">
-          This month
-        </button>
-        <button type="button" onClick={useLast30} className="btn-secondary text-xs">
-          Last 30 days
-        </button>
-        <button type="button" onClick={() => window.print()} className="btn-secondary">
-          Print
-        </button>
-        <a href={`/api/v1/fielders/${fielderId}/statement?${query}`} className="btn-primary">
-          Download PDF
-        </a>
-        {canEmail ? (
-          <button
-            type="button"
-            disabled={emailing}
-            onClick={emailStatement}
-            className="btn-secondary"
-          >
-            {emailing ? "Sending…" : "Email PDF"}
+        <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-1">
+          <button type="button" onClick={useThisMonth} className="btn-secondary text-xs">
+            This month
           </button>
-        ) : null}
+          <button type="button" onClick={useLast30} className="btn-secondary text-xs">
+            Last 30 days
+          </button>
+          <button type="button" onClick={useAllTime} className="btn-secondary text-xs">
+            All time
+          </button>
+          <button type="button" onClick={() => window.print()} className="btn-secondary text-xs">
+            Print
+          </button>
+          <a href={`/api/v1/fielders/${fielderId}/statement?${query}`} className="btn-primary text-xs">
+            Download PDF
+          </a>
+          {canEmail ? (
+            <button
+              type="button"
+              disabled={emailing}
+              onClick={emailStatement}
+              className="btn-secondary text-xs"
+            >
+              {emailing ? "Sending…" : "Email PDF"}
+            </button>
+          ) : null}
+        </div>
       </div>
       {error && <p className="text-sm text-danger">{error}</p>}
       {message && <p className="text-sm text-success">{message}</p>}

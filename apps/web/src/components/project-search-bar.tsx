@@ -62,7 +62,7 @@ export function ProjectSearchBar({ className = "" }: { className?: string }) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder="Search projects by number, title, client, or address..."
+          placeholder="Search projects…"
           className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground"
           aria-label="Search projects"
         />

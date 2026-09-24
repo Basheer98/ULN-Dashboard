@@ -83,6 +83,14 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
     ]);
   }
 
+  if (projects.length === 0) {
+    return (
+      <div className="card text-center text-sm text-muted-foreground">
+        No projects match these filters.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -94,39 +102,85 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
         >
           Export selected ({selected.size})
         </button>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground md:hidden">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+          Select all
+        </label>
       </div>
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="w-10">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Select all projects"
-                />
-              </th>
-              <th>Project</th>
-              <th>Client</th>
-              <th>State</th>
-              <th>QField</th>
-              <th>SQFT</th>
-              <th>Client Bill</th>
-              <th>ECD</th>
-              <th>Fielder</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.length === 0 ? (
+
+      <div className="mobile-card-list">
+        {projects.map((project) => (
+          <div key={project.id} className="card space-y-3 p-4">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={selected.has(project.id)}
+                onChange={() => toggle(project.id)}
+                aria-label={`Select ${project.projectNumber}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Link href={`/projects/${project.id}`} className="link text-base">
+                    {project.projectNumber}
+                  </Link>
+                  <StatusBadge status={project.status} />
+                </div>
+                <p className="mt-1 text-sm text-foreground">{project.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{project.clientName}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">State</p>
+                <p>{project.state || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">SQFT</p>
+                <p>{project.sqft.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Bill</p>
+                <p>{formatMoney(project.clientBill)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">ECD</p>
+                <p>{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "—"}</p>
+              </div>
+            </div>
+            {project.fielderName ? (
+              <p className="text-xs text-muted-foreground">Fielder: {project.fielderName}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="desktop-table">
+        <div className="card overflow-x-auto">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={10} className="text-center text-sm text-muted-foreground">
-                  No projects match these filters.
-                </td>
+                <th className="w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all projects"
+                  />
+                </th>
+                <th>Project</th>
+                <th>Client</th>
+                <th>State</th>
+                <th>QField</th>
+                <th>SQFT</th>
+                <th>Client Bill</th>
+                <th>ECD</th>
+                <th>Fielder</th>
+                <th>Status</th>
               </tr>
-            ) : (
-              projects.map((project) => (
+            </thead>
+            <tbody>
+              {projects.map((project) => (
                 <tr key={project.id}>
                   <td>
                     <input
@@ -166,10 +220,10 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                     <StatusBadge status={project.status} />
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

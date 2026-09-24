@@ -29,14 +29,26 @@ html {
     @apply bg-background text-foreground antialiased;
   }
 
-  input,
+  input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
-    @apply rounded-lg border border-border bg-surface-elevated px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-accent/20;
+    @apply w-full max-w-full rounded-lg border border-border bg-surface-elevated px-3 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-accent/20 sm:py-2;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    @apply h-4 w-4 shrink-0 rounded border-border accent-accent;
   }
 
   button:disabled {
     @apply cursor-not-allowed opacity-50;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    @apply max-w-full;
   }
 }
 
@@ -50,11 +62,11 @@ html {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition hover:bg-accent-hover;
+    @apply inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-foreground transition hover:bg-accent-hover sm:py-2;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface-hover;
+    @apply inline-flex items-center justify-center rounded-lg border border-border bg-surface-elevated px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-surface-hover sm:py-2;
   }
 
   .btn-ghost {
@@ -70,11 +82,11 @@ html {
   }
 
   .page-main {
-    @apply flex-1 p-4 sm:p-6 lg:p-8;
+    @apply min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8;
   }
 
   .page-toolbar {
-    @apply flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between;
+    @apply flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between;
   }
 
   .page-toolbar-actions {
@@ -85,12 +97,17 @@ html {
     @apply rounded-xl border border-border bg-surface p-4 transition hover:border-accent/30 hover:bg-surface-elevated sm:p-6;
   }
 
-  .card:has(.data-table) {
-    @apply overflow-x-auto;
+  .table-scroll {
+    @apply -mx-4 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:px-0;
+  }
+
+  .card:has(.data-table),
+  .card:has(.table-scroll) {
+    @apply overflow-x-auto overscroll-x-contain;
   }
 
   .data-table {
-    @apply w-full min-w-[640px] text-left text-sm;
+    @apply w-full min-w-[36rem] text-left text-sm md:min-w-[42rem];
   }
 
   .scrollbar-none {
@@ -107,7 +124,7 @@ html {
   }
 
   .data-table th {
-    @apply pb-3 pr-4 font-medium;
+    @apply whitespace-nowrap pb-3 pr-3 font-medium sm:pr-4;
   }
 
   .data-table tbody tr {
@@ -115,7 +132,15 @@ html {
   }
 
   .data-table td {
-    @apply py-3 pr-4;
+    @apply py-3 pr-3 sm:pr-4;
+  }
+
+  .mobile-card-list {
+    @apply space-y-3 md:hidden;
+  }
+
+  .desktop-table {
+    @apply hidden md:block;
   }
 
   .badge {

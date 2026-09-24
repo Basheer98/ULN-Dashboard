@@ -41,51 +41,81 @@ export default async function FieldersPage({
             Add Fielder
           </Link>
         </div>
-        <div className="card overflow-x-auto">
-          {fielders.length === 0 ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              {showInactive ? "No inactive fielders." : "No fielders yet."}
-            </p>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Rate / SQFT</th>
-                  <th>Region</th>
-                  <th>Jobs</th>
-                  <th>Mobile Login</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fielders.map((fielder) => (
-                  <tr key={fielder.id}>
-                    <td>
-                      <Link href={`/fielders/${fielder.id}`} className="link">
-                        {fielder.firstName} {fielder.lastName}
-                      </Link>
-                    </td>
-                    <td>
-                      <StatusBadge status={fielder.employmentType === "w2" ? "assigned" : "in_progress"} />
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {fielder.employmentType === "w2" ? "W-2" : "1099"}
-                      </span>
-                    </td>
-                    <td>{formatRate(toNumber(fielder.defaultSqftRate))}</td>
-                    <td>{fielder.region || "—"}</td>
-                    <td>{fielder._count.assignments}</td>
-                    <td>{fielder.user?.email || "—"}</td>
-                    <td>
-                      <StatusBadge status={fielder.isActive ? "complete" : "cancelled"} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+
+        {fielders.length === 0 ? (
+          <div className="card text-sm text-muted-foreground">
+            {showInactive ? "No inactive fielders." : "No fielders yet."}
+          </div>
+        ) : (
+          <>
+            <div className="mobile-card-list">
+              {fielders.map((fielder) => (
+                <div key={fielder.id} className="card space-y-2 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/fielders/${fielder.id}`} className="link text-base">
+                      {fielder.firstName} {fielder.lastName}
+                    </Link>
+                    <StatusBadge status={fielder.isActive ? "complete" : "cancelled"} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {fielder.employmentType === "w2" ? "W-2" : "1099"} ·{" "}
+                    {formatRate(toNumber(fielder.defaultSqftRate))}/SQFT
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {fielder.region || "No region"} · {fielder._count.assignments} jobs
+                  </p>
+                  {fielder.user?.email ? (
+                    <p className="text-xs text-muted-foreground">{fielder.user.email}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <div className="desktop-table">
+              <div className="card overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Rate / SQFT</th>
+                      <th>Region</th>
+                      <th>Jobs</th>
+                      <th>Mobile Login</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fielders.map((fielder) => (
+                      <tr key={fielder.id}>
+                        <td>
+                          <Link href={`/fielders/${fielder.id}`} className="link">
+                            {fielder.firstName} {fielder.lastName}
+                          </Link>
+                        </td>
+                        <td>
+                          <StatusBadge
+                            status={fielder.employmentType === "w2" ? "assigned" : "in_progress"}
+                          />
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {fielder.employmentType === "w2" ? "W-2" : "1099"}
+                          </span>
+                        </td>
+                        <td>{formatRate(toNumber(fielder.defaultSqftRate))}</td>
+                        <td>{fielder.region || "—"}</td>
+                        <td>{fielder._count.assignments}</td>
+                        <td>{fielder.user?.email || "—"}</td>
+                        <td>
+                          <StatusBadge status={fielder.isActive ? "complete" : "cancelled"} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </>
   );

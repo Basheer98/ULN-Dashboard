@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -9,14 +9,21 @@ export const metadata: Metadata = {
   description: "Operations dashboard for Urbanlink Networks LLC",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#09090b",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="h-full overflow-x-hidden">
+      <body className={`${inter.className} min-h-full overflow-x-hidden`}>{children}</body>
     </html>
   );
 }

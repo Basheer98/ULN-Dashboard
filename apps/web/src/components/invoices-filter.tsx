@@ -14,23 +14,21 @@ export function InvoicesFilter() {
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="w-full sm:w-auto">
         <label className="label">From</label>
         <input
           type="date"
           value={searchParams.get("from") ?? ""}
           onChange={(e) => setParam("from", e.target.value)}
-          className="w-full sm:w-auto"
         />
       </div>
-      <div>
+      <div className="w-full sm:w-auto">
         <label className="label">To</label>
         <input
           type="date"
           value={searchParams.get("to") ?? ""}
           onChange={(e) => setParam("to", e.target.value)}
-          className="w-full sm:w-auto"
         />
       </div>
       {(searchParams.get("from") || searchParams.get("to")) && (

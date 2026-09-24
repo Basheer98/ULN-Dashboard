@@ -55,9 +55,9 @@ export function DashboardShell({
           onNavigate={() => setOpen(false)}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
           <div className="border-b border-border bg-surface/40 px-4 py-3 sm:px-6 lg:px-8 print:hidden">
-            <ProjectSearchBar className="max-w-2xl" />
+            <ProjectSearchBar className="w-full max-w-2xl" />
           </div>
           <RouteGuard role={role}>{children}</RouteGuard>
         </div>

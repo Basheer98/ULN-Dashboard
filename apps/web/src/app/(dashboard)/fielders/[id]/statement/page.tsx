@@ -1,9 +1,89 @@
-import { Header } from "@/components/layout";
+import { Header, StatusBadge } from "@/components/layout";
 import { StatementControls } from "@/components/statement-controls";
-import { getFielderStatement } from "@/lib/statement";
+import { getFielderStatement, type StatementLine } from "@/lib/statement";
 import { getSessionUser } from "@/lib/auth";
 import { hasPermission, formatCurrency, formatRate, stateName } from "@uln/shared";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+
+function StatementSection({
+  title,
+  empty,
+  lines,
+  totalsHint,
+}: {
+  title: string;
+  empty: string;
+  lines: StatementLine[];
+  totalsHint?: string;
+}) {
+  return (
+    <div className="card overflow-x-auto">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">
+          {title} ({lines.length})
+        </h3>
+        {totalsHint ? <p className="text-xs text-muted-foreground">{totalsHint}</p> : null}
+      </div>
+      {lines.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{empty}</p>
+      ) : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>State</th>
+              <th>SQFT</th>
+              <th>Rate</th>
+              <th>SQFT Pay</th>
+              <th>Extras</th>
+              <th>Total</th>
+              <th>Paid</th>
+              <th>Owed</th>
+              <th>Job</th>
+              <th>Pay</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.projectId}>
+                <td>
+                  <Link href={`/projects/${l.projectId}`} className="link">
+                    {l.projectNumber}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">{l.title}</p>
+                </td>
+                <td>{stateName(l.state)}</td>
+                <td>
+                  {l.sqft.toLocaleString()}
+                  {(l.buriedSqft != null || l.aerialSqft != null) && (
+                    <p className="text-xs text-muted-foreground">
+                      {l.buriedSqft != null ? `Buried ${l.buriedSqft.toLocaleString()}` : null}
+                      {l.buriedSqft != null && l.aerialSqft != null ? " · " : null}
+                      {l.aerialSqft != null ? `Aerial ${l.aerialSqft.toLocaleString()}` : null}
+                    </p>
+                  )}
+                </td>
+                <td>{formatRate(l.rate)}</td>
+                <td>{formatCurrency(l.sqftPay)}</td>
+                <td>{formatCurrency(l.extras)}</td>
+                <td className="font-medium">{formatCurrency(l.total)}</td>
+                <td>{formatCurrency(l.amountPaid)}</td>
+                <td className={l.amountOwed > 0 ? "text-warning" : "text-success"}>
+                  {formatCurrency(l.amountOwed)}
+                </td>
+                <td>
+                  <StatusBadge status={l.assignmentStatus} />
+                </td>
+                <td className="capitalize text-sm">{l.paymentStatus.replace(/_/g, " ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
 
 export default async function FielderStatementPage({
   params,
@@ -31,7 +111,7 @@ export default async function FielderStatementPage({
   const statement = await getFielderStatement(id, range);
   if (!statement) notFound();
 
-  const { fielder, totals, lines, monthLabel } = statement;
+  const { fielder, totals, sections, monthLabel } = statement;
   const canEmail = hasPermission(user.role, "payments:write");
 
   return (
@@ -71,8 +151,14 @@ export default async function FielderStatementPage({
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Projects Completed</p>
-            <p className="mt-2 text-2xl font-semibold">{totals.projects}</p>
+            <p className="text-sm text-muted-foreground">Active / Pending / Paid</p>
+            <p className="mt-2 text-2xl font-semibold">
+              {totals.activeCount}
+              <span className="text-muted-foreground"> / </span>
+              {totals.pendingCount}
+              <span className="text-muted-foreground"> / </span>
+              {totals.paidCount}
+            </p>
           </div>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Total SQFT</p>
@@ -92,73 +178,27 @@ export default async function FielderStatementPage({
           </div>
         </div>
 
-        <div className="card overflow-x-auto">
-          <h3 className="mb-4 text-sm font-semibold text-foreground">
-            Completed projects — {monthLabel}
-          </h3>
-          {lines.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No projects completed in this period.</p>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Project</th>
-                  <th>State</th>
-                  <th>SQFT</th>
-                  <th>Rate</th>
-                  <th>SQFT Pay</th>
-                  <th>Extras</th>
-                  <th>Total</th>
-                  <th>Paid</th>
-                  <th>Owed</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((l) => (
-                  <tr key={l.projectNumber}>
-                    <td>
-                      {l.projectNumber}
-                      <p className="text-xs text-muted-foreground">{l.title}</p>
-                    </td>
-                    <td>{stateName(l.state)}</td>
-                    <td>
-                      {l.sqft.toLocaleString()}
-                      {(l.buriedSqft != null || l.aerialSqft != null) && (
-                        <p className="text-xs text-muted-foreground">
-                          {l.buriedSqft != null ? `Buried ${l.buriedSqft.toLocaleString()}` : null}
-                          {l.buriedSqft != null && l.aerialSqft != null ? " · " : null}
-                          {l.aerialSqft != null ? `Aerial ${l.aerialSqft.toLocaleString()}` : null}
-                        </p>
-                      )}
-                    </td>
-                    <td>{formatRate(l.rate)}</td>
-                    <td>{formatCurrency(l.sqftPay)}</td>
-                    <td>{formatCurrency(l.extras)}</td>
-                    <td className="font-medium">{formatCurrency(l.total)}</td>
-                    <td>{formatCurrency(l.amountPaid)}</td>
-                    <td className={l.amountOwed > 0 ? "text-warning" : "text-success"}>
-                      {formatCurrency(l.amountOwed)}
-                    </td>
-                    <td className="capitalize">{l.paymentStatus}</td>
-                  </tr>
-                ))}
-                <tr className="font-semibold">
-                  <td>TOTAL</td>
-                  <td></td>
-                  <td>{totals.sqft.toLocaleString()}</td>
-                  <td></td>
-                  <td>{formatCurrency(totals.sqftPay)}</td>
-                  <td>{formatCurrency(totals.extras)}</td>
-                  <td className="text-accent">{formatCurrency(totals.total)}</td>
-                  <td>{formatCurrency(totals.paid)}</td>
-                  <td>{formatCurrency(totals.pending)}</td>
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-        </div>
+        <StatementSection
+          title="Active projects"
+          empty="No active assignments for this fielder."
+          lines={sections.active}
+        />
+        <StatementSection
+          title={`Pending payment — ${monthLabel}`}
+          empty="No pending pay items in this period. Try Last 30 days or All time if work was completed earlier."
+          lines={sections.pending}
+          totalsHint={`Owed ${formatCurrency(
+            sections.pending.reduce((s, l) => s + l.amountOwed, 0)
+          )}`}
+        />
+        <StatementSection
+          title={`Paid — ${monthLabel}`}
+          empty="No paid projects in this period."
+          lines={sections.paid}
+          totalsHint={`Paid ${formatCurrency(
+            sections.paid.reduce((s, l) => s + l.amountPaid, 0)
+          )}`}
+        />
       </main>
     </>
   );

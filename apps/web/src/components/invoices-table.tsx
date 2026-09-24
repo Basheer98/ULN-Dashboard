@@ -40,6 +40,10 @@ function downloadCsv(filename: string, rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
+function formatMoney(n: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
 export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -120,70 +124,109 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
         >
           Export selected
         </button>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        <label className="flex items-center gap-2 text-sm text-muted-foreground md:hidden">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+          Select all
+        </label>
+        {error && <p className="w-full text-sm text-danger">{error}</p>}
       </div>
-      <div className="card overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="w-10">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Select all invoices"
-                />
-              </th>
-              <th>Invoice</th>
-              <th>Client</th>
-              <th>Project</th>
-              <th>Amount</th>
-              <th>Due</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((inv) => (
-              <tr key={inv.id}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selected.has(inv.id)}
-                    onChange={() => toggle(inv.id)}
-                    aria-label={`Select ${inv.invoiceNumber}`}
-                  />
-                </td>
-                <td>{inv.invoiceNumber}</td>
-                <td>{inv.clientName}</td>
-                <td>
+
+      <div className="mobile-card-list">
+        {invoices.map((inv) => (
+          <div key={inv.id} className="card space-y-3 p-4">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={selected.has(inv.id)}
+                onChange={() => toggle(inv.id)}
+                aria-label={`Select ${inv.invoiceNumber}`}
+              />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-foreground">{inv.invoiceNumber}</p>
+                  <StatusBadge status={inv.status} />
+                </div>
+                <p className="text-sm text-muted-foreground">{inv.clientName}</p>
+                <p className="text-sm">
                   <Link href={`/projects/${inv.projectId}`} className="link">
                     {inv.projectNumber}
                   </Link>
-                </td>
-                <td>
-                  {new Intl.NumberFormat("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                  }).format(inv.totalAmount)}
-                </td>
-                <td className={inv.status === "overdue" ? "text-danger" : ""}>
-                  {inv.dueAt ? new Date(inv.dueAt).toLocaleDateString() : "—"}
-                </td>
-                <td>
-                  <StatusBadge status={inv.status} />
-                </td>
-                <td>
-                  <InvoiceActions
-                    invoiceId={inv.id}
-                    invoiceNumber={inv.invoiceNumber}
-                    status={inv.status}
+                  <span className="text-muted-foreground"> · {formatMoney(inv.totalAmount)}</span>
+                </p>
+                <p className={`text-xs ${inv.status === "overdue" ? "text-danger" : "text-muted-foreground"}`}>
+                  Due {inv.dueAt ? new Date(inv.dueAt).toLocaleDateString() : "—"}
+                </p>
+                <InvoiceActions
+                  invoiceId={inv.id}
+                  invoiceNumber={inv.invoiceNumber}
+                  status={inv.status}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="desktop-table">
+        <div className="card overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all invoices"
                   />
-                </td>
+                </th>
+                <th>Invoice</th>
+                <th>Client</th>
+                <th>Project</th>
+                <th>Amount</th>
+                <th>Due</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => (
+                <tr key={inv.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(inv.id)}
+                      onChange={() => toggle(inv.id)}
+                      aria-label={`Select ${inv.invoiceNumber}`}
+                    />
+                  </td>
+                  <td>{inv.invoiceNumber}</td>
+                  <td>{inv.clientName}</td>
+                  <td>
+                    <Link href={`/projects/${inv.projectId}`} className="link">
+                      {inv.projectNumber}
+                    </Link>
+                  </td>
+                  <td>{formatMoney(inv.totalAmount)}</td>
+                  <td className={inv.status === "overdue" ? "text-danger" : ""}>
+                    {inv.dueAt ? new Date(inv.dueAt).toLocaleDateString() : "—"}
+                  </td>
+                  <td>
+                    <StatusBadge status={inv.status} />
+                  </td>
+                  <td>
+                    <InvoiceActions
+                      invoiceId={inv.id}
+                      invoiceNumber={inv.invoiceNumber}
+                      status={inv.status}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

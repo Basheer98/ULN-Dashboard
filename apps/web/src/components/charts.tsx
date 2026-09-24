@@ -55,12 +55,14 @@ export function ChartCard({
   className?: string;
 }) {
   return (
-    <div className={`card ${className}`}>
+    <div className={`card min-w-0 overflow-hidden ${className}`}>
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
       </div>
-      {children}
+      <div className="min-w-0 w-full overflow-x-auto">
+        {children}
+      </div>
     </div>
   );
 }

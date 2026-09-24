@@ -56,14 +56,14 @@ export function ProjectsFilter() {
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search project #, title, client, address..."
-        className="w-full sm:min-w-[200px] sm:flex-1"
+        placeholder="Search projects…"
+        className="w-full sm:min-w-[160px] sm:flex-1"
         aria-label="Search projects"
       />
       <select
         value={searchParams.get("title") ?? ""}
         onChange={(e) => setParam("title", e.target.value)}
-        className="w-full sm:w-auto sm:min-w-[160px]"
+        className="w-full sm:w-auto sm:min-w-[140px]"
         aria-label="Filter by project title"
       >
         <option value="">All titles</option>
@@ -76,7 +76,7 @@ export function ProjectsFilter() {
       <select
         value={searchParams.get("state") ?? ""}
         onChange={(e) => setParam("state", e.target.value)}
-        className="w-full sm:w-auto sm:min-w-[150px]"
+        className="w-full sm:w-auto sm:min-w-[130px]"
       >
         <option value="">All States</option>
         {US_STATES.map((s) => (
@@ -86,7 +86,7 @@ export function ProjectsFilter() {
       <select
         value={searchParams.get("status") ?? ""}
         onChange={(e) => setParam("status", e.target.value)}
-        className="w-full capitalize sm:w-auto sm:min-w-[140px]"
+        className="w-full capitalize sm:w-auto sm:min-w-[130px]"
       >
         <option value="">All Statuses</option>
         {STATUSES.map((s) => (
@@ -96,28 +96,28 @@ export function ProjectsFilter() {
       <select
         value={searchParams.get("qfield") ?? ""}
         onChange={(e) => setParam("qfield", e.target.value)}
-        className="w-full sm:w-auto sm:min-w-[130px]"
+        className="w-full sm:w-auto sm:min-w-[120px]"
       >
         <option value="">All QField</option>
         <option value="1">QField 1</option>
         <option value="2">QField 2</option>
       </select>
-      <input
-        type="date"
-        value={searchParams.get("from") ?? ""}
-        onChange={(e) => setParam("from", e.target.value)}
-        className="w-full sm:w-auto"
-        aria-label="From date"
-        title="From date (due date, or created if no due)"
-      />
-      <input
-        type="date"
-        value={searchParams.get("to") ?? ""}
-        onChange={(e) => setParam("to", e.target.value)}
-        className="w-full sm:w-auto"
-        aria-label="To date"
-        title="To date (due date, or created if no due)"
-      />
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+        <input
+          type="date"
+          value={searchParams.get("from") ?? ""}
+          onChange={(e) => setParam("from", e.target.value)}
+          aria-label="From date"
+          title="From date (due date, or created if no due)"
+        />
+        <input
+          type="date"
+          value={searchParams.get("to") ?? ""}
+          onChange={(e) => setParam("to", e.target.value)}
+          aria-label="To date"
+          title="To date (due date, or created if no due)"
+        />
+      </div>
     </div>
   );
 }

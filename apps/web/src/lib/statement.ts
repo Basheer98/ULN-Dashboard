@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { toNumber } from "@uln/shared";
 
 export interface StatementLine {
+  projectId: string;
   projectNumber: string;
   title: string;
   state: string | null;
@@ -13,9 +14,13 @@ export interface StatementLine {
   extras: number;
   total: number;
   completedAt: Date | null;
+  assignedAt: Date | null;
+  assignmentStatus: string;
   paymentStatus: string;
   amountPaid: number;
   amountOwed: number;
+  /** active | pending | paid — for statement sections */
+  bucket: "active" | "pending" | "paid";
 }
 
 export interface FielderStatement {
@@ -30,6 +35,11 @@ export interface FielderStatement {
   from: Date;
   to: Date;
   lines: StatementLine[];
+  sections: {
+    active: StatementLine[];
+    pending: StatementLine[];
+    paid: StatementLine[];
+  };
   totals: {
     projects: number;
     sqft: number;
@@ -38,6 +48,9 @@ export interface FielderStatement {
     total: number;
     paid: number;
     pending: number;
+    activeCount: number;
+    pendingCount: number;
+    paidCount: number;
   };
 }
 
@@ -71,6 +84,26 @@ function resolveRange(input?: StatementRangeInput): { from: Date; to: Date; labe
   return { from, to, label };
 }
 
+function inRange(date: Date | null | undefined, from: Date, to: Date): boolean {
+  if (!date) return false;
+  const t = date.getTime();
+  return t >= from.getTime() && t <= to.getTime();
+}
+
+function bucketFor(line: {
+  assignmentStatus: string;
+  paymentStatus: string;
+  amountPaid: number;
+  amountOwed: number;
+}): "active" | "pending" | "paid" {
+  const activeStatuses = new Set(["assigned", "accepted", "in_progress"]);
+  if (activeStatuses.has(line.assignmentStatus)) return "active";
+  if (line.paymentStatus === "paid" || (line.amountPaid > 0 && line.amountOwed <= 0.009)) {
+    return "paid";
+  }
+  return "pending";
+}
+
 /** month = "YYYY-MM" or explicit from/to ISO dates. */
 export async function getFielderStatement(
   fielderId: string,
@@ -80,25 +113,48 @@ export async function getFielderStatement(
   if (!fielder) return null;
 
   const input: StatementRangeInput =
-    typeof range === "string"
-      ? { month: range }
-      : range ?? {};
+    typeof range === "string" ? { month: range } : range ?? {};
   const { from, to, label } = resolveRange(input);
 
-  const assignments = await prisma.assignment.findMany({
-    where: {
-      fielderId,
-      status: "complete",
-      completedAt: { gte: from, lte: to },
-      project: { deletedAt: null },
-    },
-    include: {
-      project: { include: { lineItems: true, payments: true } },
-    },
-    orderBy: { completedAt: "asc" },
-  });
+  const [assignments, payments] = await Promise.all([
+    prisma.assignment.findMany({
+      where: {
+        fielderId,
+        status: { not: "cancelled" },
+        project: { deletedAt: null },
+      },
+      include: {
+        project: {
+          include: {
+            lineItems: true,
+            payments: { where: { fielderId } },
+          },
+        },
+      },
+      orderBy: [{ completedAt: "asc" }, { assignedAt: "asc" }],
+    }),
+    prisma.fielderPayment.findMany({
+      where: {
+        fielderId,
+        project: { deletedAt: null },
+      },
+      include: {
+        project: {
+          include: {
+            lineItems: true,
+            assignments: { where: { fielderId } },
+          },
+        },
+      },
+    }),
+  ]);
 
-  const lines: StatementLine[] = assignments.map((a) => {
+  const byProject = new Map<string, StatementLine>();
+
+  function upsertFromAssignment(
+    a: (typeof assignments)[number],
+    paymentOverride?: (typeof payments)[number] | null
+  ) {
     const p = a.project;
     const sqft = toNumber(a.assignedSqft) || toNumber(p.sqft);
     const rate = toNumber(a.fielderSqftRate);
@@ -106,12 +162,22 @@ export async function getFielderStatement(
     const extras = p.lineItems
       .filter((l) => l.type === "fielder_payout" && (l.fielderId === fielderId || !l.fielderId))
       .reduce((s, l) => s + toNumber(l.amount), 0);
-    const payment = p.payments.find((pm) => pm.fielderId === fielderId);
+    const payment = paymentOverride ?? p.payments[0] ?? null;
     const amountPaid = payment ? toNumber(payment.amountPaid) : 0;
     const total = sqftPay + extras;
     const owed = payment ? toNumber(payment.totalAmount) : total;
+    const amountOwed = Math.max(0, owed - amountPaid);
+    const paymentStatus = payment?.status ?? "not generated";
+    const assignmentStatus = a.status;
+    const lineBase = {
+      assignmentStatus,
+      paymentStatus,
+      amountPaid,
+      amountOwed,
+    };
 
-    return {
+    byProject.set(p.id, {
+      projectId: p.id,
       projectNumber: p.projectNumber,
       title: p.title,
       state: p.state,
@@ -123,11 +189,99 @@ export async function getFielderStatement(
       extras,
       total,
       completedAt: a.completedAt,
-      paymentStatus: payment?.status ?? "not generated",
+      assignedAt: a.assignedAt,
+      assignmentStatus,
+      paymentStatus,
       amountPaid,
-      amountOwed: Math.max(0, owed - amountPaid),
+      amountOwed,
+      bucket: bucketFor(lineBase),
+    });
+  }
+
+  // Active work always appears (so statements aren't empty when jobs aren't marked complete).
+  for (const a of assignments) {
+    if (["assigned", "accepted", "in_progress"].includes(a.status)) {
+      upsertFromAssignment(a);
+    }
+  }
+
+  // Completed work in the selected period (completedAt, else assignedAt).
+  for (const a of assignments) {
+    if (a.status !== "complete") continue;
+    const activityDate = a.completedAt ?? a.assignedAt;
+    if (!inRange(activityDate, from, to)) continue;
+    upsertFromAssignment(a);
+  }
+
+  // Payments in period or still outstanding — cover jobs that never got assignment.complete.
+  for (const payment of payments) {
+    if (!payment.project) continue;
+    const outstanding = ["pending", "approved", "partial"].includes(payment.status);
+    const paidInRange =
+      inRange(payment.paidAt, from, to) ||
+      (payment.status === "paid" && inRange(payment.createdAt, from, to));
+    const createdInRange = inRange(payment.createdAt, from, to);
+
+    if (!outstanding && !paidInRange && !createdInRange) continue;
+
+    const assignment =
+      payment.project.assignments[0] ??
+      assignments.find((a) => a.projectId === payment.projectId) ??
+      null;
+
+    if (assignment) {
+      upsertFromAssignment(assignment, payment);
+      continue;
+    }
+
+    // Payment with no assignment row — still show from project + payment.
+    const p = payment.project;
+    const sqft = toNumber(p.sqft);
+    const rate = 0;
+    const sqftPay = toNumber(payment.sqftAmount);
+    const extras = toNumber(payment.lineItemsTotal);
+    const total = toNumber(payment.totalAmount);
+    const amountPaid = toNumber(payment.amountPaid);
+    const amountOwed = Math.max(0, total - amountPaid);
+    const lineBase = {
+      assignmentStatus: "complete",
+      paymentStatus: payment.status,
+      amountPaid,
+      amountOwed,
     };
+    byProject.set(p.id, {
+      projectId: p.id,
+      projectNumber: p.projectNumber,
+      title: p.title,
+      state: p.state,
+      buriedSqft: p.buriedSqft != null ? toNumber(p.buriedSqft) : null,
+      aerialSqft: p.aerialSqft != null ? toNumber(p.aerialSqft) : null,
+      sqft,
+      rate,
+      sqftPay,
+      extras,
+      total,
+      completedAt: p.completedAt,
+      assignedAt: null,
+      assignmentStatus: "complete",
+      paymentStatus: payment.status,
+      amountPaid,
+      amountOwed,
+      bucket: bucketFor(lineBase),
+    });
+  }
+
+  const lines = Array.from(byProject.values()).sort((a, b) => {
+    const da = (a.completedAt ?? a.assignedAt)?.getTime() ?? 0;
+    const db = (b.completedAt ?? b.assignedAt)?.getTime() ?? 0;
+    return da - db;
   });
+
+  const sections = {
+    active: lines.filter((l) => l.bucket === "active"),
+    pending: lines.filter((l) => l.bucket === "pending"),
+    paid: lines.filter((l) => l.bucket === "paid"),
+  };
 
   const totals = lines.reduce(
     (acc, l) => {
@@ -140,8 +294,22 @@ export async function getFielderStatement(
       acc.pending += l.amountOwed;
       return acc;
     },
-    { projects: 0, sqft: 0, sqftPay: 0, extras: 0, total: 0, paid: 0, pending: 0 }
+    {
+      projects: 0,
+      sqft: 0,
+      sqftPay: 0,
+      extras: 0,
+      total: 0,
+      paid: 0,
+      pending: 0,
+      activeCount: sections.active.length,
+      pendingCount: sections.pending.length,
+      paidCount: sections.paid.length,
+    }
   );
+  totals.activeCount = sections.active.length;
+  totals.pendingCount = sections.pending.length;
+  totals.paidCount = sections.paid.length;
 
   return {
     fielder: {
@@ -155,6 +323,7 @@ export async function getFielderStatement(
     from,
     to,
     lines,
+    sections,
     totals,
   };
 }
