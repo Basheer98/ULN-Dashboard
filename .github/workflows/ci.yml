@@ -39,7 +39,7 @@ jobs:
         run: npm run typecheck --workspace=@uln/web
 
       - name: Typecheck mobile
-        run: cd apps/mobile && npm run typecheck
+        run: npm run typecheck --workspace=@uln/mobile
 
       - name: Run tests
         run: npm test
