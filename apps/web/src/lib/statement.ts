@@ -142,7 +142,6 @@ export async function getFielderStatement(
         project: {
           include: {
             lineItems: true,
-            assignments: { where: { fielderId } },
           },
         },
       },
@@ -224,10 +223,7 @@ export async function getFielderStatement(
 
     if (!outstanding && !paidInRange && !createdInRange) continue;
 
-    const assignment =
-      payment.project.assignments[0] ??
-      assignments.find((a) => a.projectId === payment.projectId) ??
-      null;
+    const assignment = assignments.find((a) => a.projectId === payment.projectId) ?? null;
 
     if (assignment) {
       upsertFromAssignment(assignment, payment);
