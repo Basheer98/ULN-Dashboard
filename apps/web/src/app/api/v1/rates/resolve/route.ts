@@ -1,11 +1,16 @@
 import { NextRequest } from "next/server";
+import { canViewProjectFinancials } from "@uln/shared";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonOk, requireOfficeUser } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
 import { resolveRatesForProject, resolveFielderRateForAssignment } from "@/lib/rates";
 
 export async function GET(request: NextRequest) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
+    if (!canViewProjectFinancials(user.role)) {
+      return jsonError("Forbidden", 403);
+    }
+
     const { searchParams } = request.nextUrl;
     const clientId = searchParams.get("clientId");
     const state = searchParams.get("state");

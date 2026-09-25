@@ -1,15 +1,16 @@
 import { NextRequest } from "next/server";
-import { projectCreateSchema } from "@uln/shared";
+import { canViewProjectFinancials, projectCreateSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
 import { assignFielderToProject } from "@/lib/assignments";
-import { activeProjectWhere, serializeProject } from "@/lib/projects";
+import { activeProjectWhere, serializeProject, stripProjectMoney } from "@/lib/projects";
 import { logActivity } from "@/lib/activity-log";
+import { resolveFielderRateForAssignment, resolveRatesForProject } from "@/lib/rates";
 
 export async function GET(request: NextRequest) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
 
     const projects = await prisma.project.findMany({
       where: activeProjectWhere,
@@ -21,7 +22,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return jsonOk(serializeProject(projects));
+    const serialized = serializeProject(projects);
+    if (!canViewProjectFinancials(user.role)) {
+      return jsonOk(stripProjectMoney(serialized));
+    }
+    return jsonOk(serialized);
   } catch (error) {
     return handleApiError(error);
   }
@@ -30,6 +35,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = requirePermission(await getRequestUser(request), "projects:write");
+    const canSeeMoney = canViewProjectFinancials(user.role);
 
     const body = await request.json();
     const parsed = projectCreateSchema.safeParse(body);
@@ -51,6 +57,12 @@ export async function POST(request: NextRequest) {
 
     const { assignment, ...projectData } = parsed.data;
 
+    let clientSqftRate = projectData.clientSqftRate;
+    if (clientSqftRate === undefined || !canSeeMoney) {
+      const rates = await resolveRatesForProject(projectData.clientId, projectData.state);
+      clientSqftRate = rates.client.clientSqftRate;
+    }
+
     const project = await prisma.project.create({
       data: {
         projectNumber,
@@ -66,7 +78,7 @@ export async function POST(request: NextRequest) {
         sqft: projectData.sqft,
         buriedSqft: projectData.buriedSqft ?? null,
         aerialSqft: projectData.aerialSqft ?? null,
-        clientSqftRate: projectData.clientSqftRate,
+        clientSqftRate,
         status: assignment ? "assigned" : projectData.status ?? "draft",
         dueDate: projectData.dueDate ? new Date(projectData.dueDate) : null,
         notes: projectData.notes,
@@ -89,7 +101,18 @@ export async function POST(request: NextRequest) {
 
     if (assignment) {
       try {
-        await assignFielderToProject(project.id, assignment);
+        let fielderSqftRate = assignment.fielderSqftRate;
+        if (fielderSqftRate === undefined || !canSeeMoney) {
+          const fr = await resolveFielderRateForAssignment(
+            assignment.fielderId,
+            project.state
+          );
+          fielderSqftRate = fr.fielderSqftRate;
+        }
+        await assignFielderToProject(project.id, {
+          ...assignment,
+          fielderSqftRate,
+        });
         await logActivity({
           entityType: "project",
           entityId: project.id,
@@ -108,10 +131,12 @@ export async function POST(request: NextRequest) {
         include: { client: true, assignments: { include: { fielder: true } } },
       });
 
-      return jsonOk(serializeProject(withAssignment!), 201);
+      const serialized = serializeProject(withAssignment!);
+      return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized), 201);
     }
 
-    return jsonOk(serializeProject(project), 201);
+    const serialized = serializeProject(project);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized), 201);
   } catch (error) {
     return handleApiError(error);
   }

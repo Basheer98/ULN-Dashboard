@@ -10,10 +10,11 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { apiRequest } from "../../src/lib/api";
-import { getToken } from "../../src/lib/auth";
+import { getToken, getUser } from "../../src/lib/auth";
 import { loadClients, loadFielders, resolveRates, type Client, type Fielder } from "../../src/lib/admin-api";
 import { FormField, FormSection } from "../../src/components/form-field";
 import { ChipPicker, OptionList } from "../../src/components/chip-picker";
+import { canViewProjectFinancials } from "../../src/lib/permissions";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 
@@ -22,6 +23,7 @@ export default function NewProjectScreen() {
   const [fielders, setFielders] = useState<Fielder[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [canSeeMoney, setCanSeeMoney] = useState(false);
 
   const [projectNumber, setProjectNumber] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -45,6 +47,8 @@ export default function NewProjectScreen() {
     (async () => {
       const token = await getToken();
       if (!token) return router.replace("/login");
+      const user = await getUser();
+      setCanSeeMoney(canViewProjectFinancials(user?.role));
       try {
         const [c, f] = await Promise.all([loadClients(token), loadFielders(token)]);
         setClients(c.filter((x) => x.isActive));
@@ -56,7 +60,7 @@ export default function NewProjectScreen() {
   }, []);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!canSeeMoney || !clientId) return;
     (async () => {
       const token = await getToken();
       if (!token) return;
@@ -72,7 +76,7 @@ export default function NewProjectScreen() {
         /* keep defaults */
       }
     })();
-  }, [clientId, state, fielderId]);
+  }, [clientId, state, fielderId, canSeeMoney]);
 
   async function handleSubmit() {
     if (!projectNumber.trim() || !clientId || !title.trim() || !siteAddress.trim()) {
@@ -101,16 +105,19 @@ export default function NewProjectScreen() {
         jobType: jobType || undefined,
         qfield: qfield ? Number(qfield) : undefined,
         sqft: parsedSqft,
-        clientSqftRate: parseFloat(clientSqftRate) || 0,
         dueDate: dueDate || undefined,
         description: description || undefined,
         notes: notes || undefined,
       };
+      if (canSeeMoney) {
+        body.clientSqftRate = parseFloat(clientSqftRate) || 0;
+      }
       if (assignFielder && fielderId) {
-        body.assignment = {
-          fielderId,
-          fielderSqftRate: parseFloat(fielderSqftRate) || 0,
-        };
+        const assignment: Record<string, unknown> = { fielderId };
+        if (canSeeMoney) {
+          assignment.fielderSqftRate = parseFloat(fielderSqftRate) || 0;
+        }
+        body.assignment = assignment;
       }
       const project = await apiRequest<{ id: string }>("/projects", {
         method: "POST",
@@ -146,7 +153,9 @@ export default function NewProjectScreen() {
         <FormField label="Job type" value={jobType} onChangeText={setJobType} placeholder="Fiber drop" />
         <ChipPicker label="QField" options={["1", "2"] as const} value={qfield} onChange={setQfield} formatLabel={(v) => `QField ${v}`} />
         <FormField label="SQFT *" value={sqft} onChangeText={setSqft} keyboardType="decimal-pad" placeholder="5000" />
-        <FormField label="Client rate ($/SQFT)" value={clientSqftRate} onChangeText={setClientSqftRate} keyboardType="decimal-pad" />
+        {canSeeMoney ? (
+          <FormField label="Client rate ($/SQFT)" value={clientSqftRate} onChangeText={setClientSqftRate} keyboardType="decimal-pad" />
+        ) : null}
         <FormField label="ECD (YYYY-MM-DD)" value={dueDate} onChangeText={setDueDate} placeholder="2026-07-20" />
         <FormField label="Description" value={description} onChangeText={setDescription} multiline />
         <FormField label="Notes" value={notes} onChangeText={setNotes} multiline />
@@ -168,7 +177,9 @@ export default function NewProjectScreen() {
               onSelect={setFielderId}
               getLabel={(f) => `${f.firstName} ${f.lastName}`}
             />
-            <FormField label="Fielder rate ($/SQFT)" value={fielderSqftRate} onChangeText={setFielderSqftRate} keyboardType="decimal-pad" />
+            {canSeeMoney ? (
+              <FormField label="Fielder rate ($/SQFT)" value={fielderSqftRate} onChangeText={setFielderSqftRate} keyboardType="decimal-pad" />
+            ) : null}
           </>
         ) : null}
       </FormSection>

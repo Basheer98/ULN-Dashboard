@@ -10,11 +10,11 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { apiRequest } from "../../../src/lib/api";
-import { getToken } from "../../../src/lib/auth";
+import { getToken, getUser } from "../../../src/lib/auth";
 import { loadClients, resolveRates, type Client } from "../../../src/lib/admin-api";
 import { FormField, FormSection } from "../../../src/components/form-field";
 import { ChipPicker, OptionList } from "../../../src/components/chip-picker";
-import { PROJECT_STATUSES } from "../../../src/lib/permissions";
+import { PROJECT_STATUSES, canViewProjectFinancials } from "../../../src/lib/permissions";
 import { colors } from "../../../src/lib/theme";
 import { fonts } from "../../../src/lib/fonts";
 
@@ -30,7 +30,7 @@ interface ProjectEdit {
   jobType: string | null;
   qfield: number | null;
   sqft: number;
-  clientSqftRate: number;
+  clientSqftRate?: number;
   status: string;
   dueDate: string | null;
   description: string | null;
@@ -42,6 +42,7 @@ export default function EditProjectScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [canSeeMoney, setCanSeeMoney] = useState(false);
 
   const [projectNumber, setProjectNumber] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -63,6 +64,9 @@ export default function EditProjectScreen() {
     (async () => {
       const token = await getToken();
       if (!token || !id) return router.replace("/login");
+      const user = await getUser();
+      const seeMoney = canViewProjectFinancials(user?.role);
+      setCanSeeMoney(seeMoney);
       try {
         const [project, clientList] = await Promise.all([
           apiRequest<ProjectEdit>(`/projects/${id}`, { token }),
@@ -79,7 +83,9 @@ export default function EditProjectScreen() {
         setJobType(project.jobType ?? "");
         setQfield(project.qfield === 1 || project.qfield === 2 ? String(project.qfield) as "1" | "2" : null);
         setSqft(String(project.sqft));
-        setClientSqftRate(String(project.clientSqftRate));
+        if (seeMoney && project.clientSqftRate != null) {
+          setClientSqftRate(String(project.clientSqftRate));
+        }
         setStatus(project.status);
         setDueDate(project.dueDate ? project.dueDate.slice(0, 10) : "");
         setDescription(project.description ?? "");
@@ -94,7 +100,7 @@ export default function EditProjectScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!clientId) return;
+    if (!canSeeMoney || !clientId) return;
     (async () => {
       const token = await getToken();
       if (!token) return;
@@ -105,7 +111,7 @@ export default function EditProjectScreen() {
         /* keep current */
       }
     })();
-  }, [clientId, state]);
+  }, [clientId, state, canSeeMoney]);
 
   async function handleSubmit() {
     if (!clientId || !title.trim() || !siteAddress.trim()) {
@@ -123,25 +129,28 @@ export default function EditProjectScreen() {
     if (!token || !id) return;
 
     try {
+      const body: Record<string, unknown> = {
+        clientId,
+        title: title.trim(),
+        siteAddress: siteAddress.trim(),
+        city: city || undefined,
+        state: state || undefined,
+        zip: zip || undefined,
+        jobType: jobType || undefined,
+        qfield: qfield ? Number(qfield) : null,
+        sqft: parsedSqft,
+        status,
+        dueDate: dueDate || null,
+        description: description || undefined,
+        notes: notes || undefined,
+      };
+      if (canSeeMoney) {
+        body.clientSqftRate = parseFloat(clientSqftRate) || 0;
+      }
       await apiRequest(`/projects/${id}`, {
         method: "PATCH",
         token,
-        body: JSON.stringify({
-          clientId,
-          title: title.trim(),
-          siteAddress: siteAddress.trim(),
-          city: city || undefined,
-          state: state || undefined,
-          zip: zip || undefined,
-          jobType: jobType || undefined,
-          qfield: qfield ? Number(qfield) : null,
-          sqft: parsedSqft,
-          clientSqftRate: parseFloat(clientSqftRate) || 0,
-          status,
-          dueDate: dueDate || null,
-          description: description || undefined,
-          notes: notes || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       router.back();
     } catch (err) {
@@ -171,7 +180,9 @@ export default function EditProjectScreen() {
       <FormField label="Job type" value={jobType} onChangeText={setJobType} />
       <ChipPicker label="QField" options={["1", "2"] as const} value={qfield} onChange={setQfield} formatLabel={(v) => `QField ${v}`} />
       <FormField label="SQFT *" value={sqft} onChangeText={setSqft} keyboardType="decimal-pad" />
-      <FormField label="Client rate ($/SQFT)" value={clientSqftRate} onChangeText={setClientSqftRate} keyboardType="decimal-pad" />
+      {canSeeMoney ? (
+        <FormField label="Client rate ($/SQFT)" value={clientSqftRate} onChangeText={setClientSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <ChipPicker
         label="Status"
         options={PROJECT_STATUSES}

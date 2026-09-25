@@ -53,6 +53,16 @@ export function hasPermission(role: string | undefined, permission: Permission):
   return ROLE_PERMISSIONS[role as UserRole]?.includes(permission) ?? false;
 }
 
+/** Rates, client totals, fielder pay — admin/accountant only (not dispatchers). */
+export function canViewProjectFinancials(role: string | undefined): boolean {
+  return (
+    hasPermission(role, "rates:read") ||
+    hasPermission(role, "invoices:read") ||
+    hasPermission(role, "payments:read") ||
+    hasPermission(role, "finance:read")
+  );
+}
+
 export const PROJECT_STATUSES = [
   "draft",
   "assigned",

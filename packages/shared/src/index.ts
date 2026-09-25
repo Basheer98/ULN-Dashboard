@@ -43,7 +43,7 @@ export const projectSchema = z.object({
   sqft: z.coerce.number().min(0),
   buriedSqft: z.coerce.number().min(0).optional().nullable(),
   aerialSqft: z.coerce.number().min(0).optional().nullable(),
-  clientSqftRate: z.coerce.number().min(0),
+  clientSqftRate: z.coerce.number().min(0).optional(),
   status: z
     .enum([
       "draft",
@@ -68,7 +68,7 @@ export const lineItemSchema = z.object({
 
 export const assignmentSchema = z.object({
   fielderId: z.string().min(1),
-  fielderSqftRate: z.coerce.number().min(0),
+  fielderSqftRate: z.coerce.number().min(0).optional(),
   assignedSqft: z.coerce.number().min(0).optional(),
   notes: z.string().optional(),
 });

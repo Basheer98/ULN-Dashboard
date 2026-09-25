@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams, useFocusEffect, router } from "expo-router";
 import { apiRequest } from "../../src/lib/api";
 import { getToken, getUser } from "../../src/lib/auth";
-import { hasPermission, ASSIGNMENT_STATUSES, PROJECT_STATUSES } from "../../src/lib/permissions";
+import { hasPermission, canViewProjectFinancials, ASSIGNMENT_STATUSES, PROJECT_STATUSES } from "../../src/lib/permissions";
 import { colors, getStatusColor } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 import { layout, screenStyles } from "../../src/lib/layout";
@@ -38,7 +38,7 @@ interface ProjectDetail {
   assignments: Array<{
     id: string;
     status: string;
-    fielderSqftRate: number;
+    fielderSqftRate?: number;
     fielder: { firstName: string; lastName: string };
   }>;
   financials?: {
@@ -54,6 +54,7 @@ export default function ProjectDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [canWrite, setCanWrite] = useState(false);
+  const [canSeeMoney, setCanSeeMoney] = useState(false);
   const [canInvoice, setCanInvoice] = useState(false);
   const [canPay, setCanPay] = useState(false);
   const [acting, setActing] = useState(false);
@@ -63,6 +64,7 @@ export default function ProjectDetailScreen() {
     if (!token || !id) return;
     const user = await getUser();
     setCanWrite(hasPermission(user?.role, "projects:write"));
+    setCanSeeMoney(canViewProjectFinancials(user?.role));
     setCanInvoice(hasPermission(user?.role, "invoices:write"));
     setCanPay(hasPermission(user?.role, "payments:write"));
     try {
@@ -221,7 +223,7 @@ export default function ProjectDetailScreen() {
         </View>
       ) : null}
 
-      {project.financials ? (
+      {canSeeMoney && project.financials ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Financials</Text>
           <Text style={styles.meta}>Client total: ${project.financials.client.total.toFixed(2)}</Text>
@@ -254,8 +256,12 @@ export default function ProjectDetailScreen() {
           project.assignments.map((assignment) => (
             <View key={assignment.id} style={styles.assignment}>
               <Text style={styles.meta}>
-                {assignment.fielder.firstName} {assignment.fielder.lastName} · $
-                {assignment.fielderSqftRate}/SQFT · {assignment.status.replace(/_/g, " ")}
+                {assignment.fielder.firstName} {assignment.fielder.lastName}
+                {canSeeMoney && assignment.fielderSqftRate != null
+                  ? ` · $${assignment.fielderSqftRate}/SQFT`
+                  : ""}
+                {" · "}
+                {assignment.status.replace(/_/g, " ")}
               </Text>
               {canWrite ? (
                 <View style={[screenStyles.rowWrap, { marginTop: 8 }]}>

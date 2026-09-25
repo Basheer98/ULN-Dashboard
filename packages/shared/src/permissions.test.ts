@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { canAccessRoute, hasPermission, NAV_BY_ROLE } from "./permissions";
+import {
+  canAccessRoute,
+  canViewProjectFinancials,
+  hasPermission,
+  NAV_BY_ROLE,
+} from "./permissions";
 
 describe("canAccessRoute", () => {
   it("allows admin everywhere", () => {
@@ -47,5 +52,12 @@ describe("role permissions consistency", () => {
     expect(hasPermission("fielder", "expense:self:read")).toBe(true);
     expect(hasPermission("fielder", "finance:read")).toBe(false);
     expect(hasPermission("fielder", "finance:admin")).toBe(false);
+  });
+
+  it("dispatchers cannot view project financials", () => {
+    expect(canViewProjectFinancials("dispatcher")).toBe(false);
+    expect(canViewProjectFinancials("admin")).toBe(true);
+    expect(canViewProjectFinancials("accountant")).toBe(true);
+    expect(canViewProjectFinancials("fielder")).toBe(false);
   });
 });

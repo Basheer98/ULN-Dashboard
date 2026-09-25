@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { projectSchema } from "@uln/shared";
+import { canViewProjectFinancials, projectSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
@@ -8,6 +8,7 @@ import {
   projectFieldChanges,
   serializeProject,
   softDeleteProject,
+  stripProjectMoney,
 } from "@/lib/projects";
 import { logActivity } from "@/lib/activity-log";
 import { z } from "zod";
@@ -65,22 +66,28 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
     const { id } = await params;
+    const canSeeMoney = canViewProjectFinancials(user.role);
 
     const project = await prisma.project.findFirst({
       where: { id, deletedAt: null },
       include: {
         client: true,
         assignments: { include: { fielder: true } },
-        lineItems: { include: { fielder: true } },
+        lineItems: canSeeMoney ? { include: { fielder: true } } : false,
       },
     });
 
     if (!project) return jsonError("Project not found", 404);
 
+    const serialized = serializeProject(project);
+    if (!canSeeMoney) {
+      return jsonOk(stripProjectMoney(serialized));
+    }
+
     const financials = await getProjectFinancials(id);
-    return jsonOk({ ...serializeProject(project), financials });
+    return jsonOk({ ...serialized, financials });
   } catch (error) {
     return handleApiError(error);
   }
@@ -117,6 +124,9 @@ export async function PATCH(
     }
 
     const data: Record<string, unknown> = { ...parsed.data };
+    if (!canViewProjectFinancials(user.role)) {
+      delete data.clientSqftRate;
+    }
     if (parsed.data.projectNumber !== undefined) {
       data.projectNumber = parsed.data.projectNumber.trim();
     }

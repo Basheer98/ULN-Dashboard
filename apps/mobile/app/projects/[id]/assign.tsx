@@ -10,10 +10,11 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { apiRequest } from "../../../src/lib/api";
-import { getToken } from "../../../src/lib/auth";
+import { getToken, getUser } from "../../../src/lib/auth";
 import { loadFielders, resolveRates, type Fielder } from "../../../src/lib/admin-api";
 import { FormField } from "../../../src/components/form-field";
 import { OptionList } from "../../../src/components/chip-picker";
+import { canViewProjectFinancials } from "../../../src/lib/permissions";
 import { colors } from "../../../src/lib/theme";
 import { fonts } from "../../../src/lib/fonts";
 
@@ -28,11 +29,14 @@ export default function AssignFielderScreen() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [canSeeMoney, setCanSeeMoney] = useState(false);
 
   useEffect(() => {
     (async () => {
       const token = await getToken();
       if (!token || !id) return router.replace("/login");
+      const user = await getUser();
+      setCanSeeMoney(canViewProjectFinancials(user?.role));
       try {
         const [project, fielderList] = await Promise.all([
           apiRequest<{ clientId: string; state: string | null; sqft: number }>(`/projects/${id}`, { token }),
@@ -49,7 +53,7 @@ export default function AssignFielderScreen() {
   }, [id]);
 
   useEffect(() => {
-    if (!fielderId || !clientId) return;
+    if (!canSeeMoney || !fielderId || !clientId) return;
     (async () => {
       const token = await getToken();
       if (!token) return;
@@ -60,7 +64,7 @@ export default function AssignFielderScreen() {
         /* keep default */
       }
     })();
-  }, [fielderId, clientId, state]);
+  }, [fielderId, clientId, state, canSeeMoney]);
 
   async function handleSubmit() {
     if (!fielderId) {
@@ -72,15 +76,18 @@ export default function AssignFielderScreen() {
     if (!token || !id) return;
 
     try {
+      const body: Record<string, unknown> = {
+        fielderId,
+        assignedSqft: assignedSqft ? parseFloat(assignedSqft) : undefined,
+        notes: notes || undefined,
+      };
+      if (canSeeMoney) {
+        body.fielderSqftRate = parseFloat(fielderSqftRate) || 0;
+      }
       await apiRequest(`/projects/${id}/assignments`, {
         method: "POST",
         token,
-        body: JSON.stringify({
-          fielderId,
-          fielderSqftRate: parseFloat(fielderSqftRate) || 0,
-          assignedSqft: assignedSqft ? parseFloat(assignedSqft) : undefined,
-          notes: notes || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       router.back();
     } catch (err) {
@@ -107,7 +114,9 @@ export default function AssignFielderScreen() {
         onSelect={setFielderId}
         getLabel={(f) => `${f.firstName} ${f.lastName}`}
       />
-      <FormField label="Fielder rate ($/SQFT)" value={fielderSqftRate} onChangeText={setFielderSqftRate} keyboardType="decimal-pad" />
+      {canSeeMoney ? (
+        <FormField label="Fielder rate ($/SQFT)" value={fielderSqftRate} onChangeText={setFielderSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <FormField label="Assigned SQFT" value={assignedSqft} onChangeText={setAssignedSqft} keyboardType="decimal-pad" />
       <FormField label="Notes" value={notes} onChangeText={setNotes} multiline />
 

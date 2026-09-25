@@ -2,7 +2,7 @@ import { Header } from "@/components/layout";
 import { ProjectsFilter } from "@/components/projects-filter";
 import { ProjectsTable, type ProjectRow } from "@/components/projects-table";
 import { prisma } from "@/lib/prisma";
-import { toNumber, stateName, hasPermission } from "@uln/shared";
+import { toNumber, stateName, hasPermission, canViewProjectFinancials } from "@uln/shared";
 import type { Prisma, ProjectStatus } from "@uln/database";
 import Link from "next/link";
 import { buildProjectSearchWhere } from "@/lib/project-search";
@@ -32,6 +32,7 @@ export default async function ProjectsPage({
   const params = await searchParams;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "projects:write") : false;
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
   if (params.state) where.state = params.state;
@@ -79,7 +80,9 @@ export default async function ProjectsPage({
       sqft: toNumber(project.sqft),
       buriedSqft: project.buriedSqft != null ? toNumber(project.buriedSqft) : null,
       aerialSqft: project.aerialSqft != null ? toNumber(project.aerialSqft) : null,
-      clientBill: toNumber(project.sqft) * toNumber(project.clientSqftRate),
+      clientBill: canSeeMoney
+        ? toNumber(project.sqft) * toNumber(project.clientSqftRate)
+        : 0,
       dueDate: project.dueDate?.toISOString() ?? null,
       fielderName: fielder ? `${fielder.firstName} ${fielder.lastName}` : null,
       status: project.status,
@@ -88,7 +91,14 @@ export default async function ProjectsPage({
 
   return (
     <>
-      <Header title="Projects" subtitle="Track jobs, SQFT billing, and assignments" />
+      <Header
+        title="Projects"
+        subtitle={
+          canSeeMoney
+            ? "Track jobs, SQFT billing, and assignments"
+            : "Track jobs and assignments"
+        }
+      />
       <main className="page-main space-y-6">
         <div className="page-toolbar">
           <ProjectsFilter />
@@ -106,7 +116,7 @@ export default async function ProjectsPage({
             </div>
           )}
         </div>
-        <ProjectsTable projects={rows} />
+        <ProjectsTable projects={rows} canSeeMoney={canSeeMoney} />
       </main>
     </>
   );

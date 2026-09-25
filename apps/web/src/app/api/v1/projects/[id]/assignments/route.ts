@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
-import { assignmentSchema } from "@uln/shared";
+import { assignmentSchema, canViewProjectFinancials } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
 import { assignFielderToProject } from "@/lib/assignments";
-import { serializeProject } from "@/lib/projects";
+import { serializeProject, stripProjectMoney } from "@/lib/projects";
 import { logActivity } from "@/lib/activity-log";
+import { resolveFielderRateForAssignment } from "@/lib/rates";
 
 export async function POST(
   request: NextRequest,
@@ -13,6 +14,7 @@ export async function POST(
 ) {
   try {
     const user = requirePermission(await getRequestUser(request), "projects:write");
+    const canSeeMoney = canViewProjectFinancials(user.role);
     const { id: projectId } = await params;
 
     const project = await prisma.project.findFirst({
@@ -27,7 +29,19 @@ export async function POST(
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
     }
 
-    const assignment = await assignFielderToProject(projectId, parsed.data);
+    let fielderSqftRate = parsed.data.fielderSqftRate;
+    if (fielderSqftRate === undefined || !canSeeMoney) {
+      const fr = await resolveFielderRateForAssignment(
+        parsed.data.fielderId,
+        project.state
+      );
+      fielderSqftRate = fr.fielderSqftRate;
+    }
+
+    const assignment = await assignFielderToProject(projectId, {
+      ...parsed.data,
+      fielderSqftRate,
+    });
 
     await logActivity({
       entityType: "project",
@@ -38,7 +52,8 @@ export async function POST(
       metadata: { fielderId: parsed.data.fielderId },
     });
 
-    return jsonOk(serializeProject(assignment), 201);
+    const serialized = serializeProject(assignment);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized), 201);
   } catch (error) {
     return handleApiError(error);
   }

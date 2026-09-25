@@ -81,6 +81,25 @@ export function serializeProject<T>(value: T): T {
   ) as T;
 }
 
+/** Remove rate/pay/billing fields so dispatchers never receive money in API payloads. */
+export function stripProjectMoney<T>(value: T): T {
+  return JSON.parse(
+    JSON.stringify(value, (key, val) => {
+      if (
+        key === "clientSqftRate" ||
+        key === "fielderSqftRate" ||
+        key === "defaultSqftRate" ||
+        key === "amount" ||
+        key === "financials" ||
+        key === "lineItems"
+      ) {
+        return undefined;
+      }
+      return val;
+    })
+  ) as T;
+}
+
 async function linkedExpenseIds(projectId: string): Promise<string[]> {
   const [direct, allocated] = await Promise.all([
     prisma.financialTransaction.findMany({

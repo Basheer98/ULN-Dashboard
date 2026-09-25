@@ -80,6 +80,16 @@ export function hasAnyFinanceAccess(role: UserRole): boolean {
   );
 }
 
+/** Rates, client totals, fielder pay — admin/accountant only (not dispatchers). */
+export function canViewProjectFinancials(role: UserRole): boolean {
+  return (
+    hasPermission(role, "rates:read") ||
+    hasPermission(role, "invoices:read") ||
+    hasPermission(role, "payments:read") ||
+    hasPermission(role, "finance:read")
+  );
+}
+
 export function canAccessRoute(role: UserRole, path: string): boolean {
   if (role === "admin") return true;
   if (path.startsWith("/dashboard")) return true;

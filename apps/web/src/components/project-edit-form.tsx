@@ -41,7 +41,13 @@ const STATUSES = [
   "cancelled",
 ] as const;
 
-export function ProjectEditForm({ project }: { project: ProjectEditValues }) {
+export function ProjectEditForm({
+  project,
+  canSeeMoney = true,
+}: {
+  project: ProjectEditValues;
+  canSeeMoney?: boolean;
+}) {
   const router = useRouter();
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientId, setClientId] = useState(project.clientId);
@@ -83,7 +89,7 @@ export function ProjectEditForm({ project }: { project: ProjectEditValues }) {
     setSaved(false);
 
     const form = new FormData(e.currentTarget);
-    const payload = {
+    const payload: Record<string, unknown> = {
       projectNumber: form.get("projectNumber"),
       clientId,
       title: form.get("title"),
@@ -97,11 +103,13 @@ export function ProjectEditForm({ project }: { project: ProjectEditValues }) {
       sqft,
       buriedSqft: buriedSqft === "" ? null : Number(buriedSqft),
       aerialSqft: aerialSqft === "" ? null : Number(aerialSqft),
-      clientSqftRate,
       status,
       dueDate: form.get("dueDate") || null,
       notes: form.get("notes") || undefined,
     };
+    if (canSeeMoney) {
+      payload.clientSqftRate = clientSqftRate;
+    }
 
     const res = await fetch(`/api/v1/projects/${project.id}`, {
       method: "PATCH",
@@ -253,18 +261,20 @@ export function ProjectEditForm({ project }: { project: ProjectEditValues }) {
             Filling both auto-sets total SQFT.
           </p>
         </div>
-        <div>
-          <label className="label">Client Rate ($/SQFT) *</label>
-          <input
-            value={clientSqftRate}
-            onChange={(e) => setClientSqftRate(e.target.value)}
-            type="number"
-            step="0.0001"
-            min="0"
-            required
-            className="w-full"
-          />
-        </div>
+        {canSeeMoney ? (
+          <div>
+            <label className="label">Client Rate ($/SQFT) *</label>
+            <input
+              value={clientSqftRate}
+              onChange={(e) => setClientSqftRate(e.target.value)}
+              type="number"
+              step="0.0001"
+              min="0"
+              required
+              className="w-full"
+            />
+          </div>
+        ) : null}
         <div>
           <label className="label">ECD</label>
           <input

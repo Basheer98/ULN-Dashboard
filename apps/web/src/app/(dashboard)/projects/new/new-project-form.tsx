@@ -20,7 +20,7 @@ interface FielderOption {
   isActive: boolean;
 }
 
-export default function NewProjectPage() {
+export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
@@ -64,6 +64,7 @@ export default function NewProjectPage() {
   }, []);
 
   useEffect(() => {
+    if (!canSeeMoney) return;
     if (!clientId && !stateCode) return;
     const params = new URLSearchParams();
     if (clientId) params.set("clientId", clientId);
@@ -78,9 +79,10 @@ export default function NewProjectPage() {
         }
       })
       .catch(() => {});
-  }, [clientId, stateCode]);
+  }, [clientId, stateCode, canSeeMoney]);
 
   useEffect(() => {
+    if (!canSeeMoney) return;
     if (!fielderId) {
       setFielderSqftRate("");
       setFielderRateSource("");
@@ -112,7 +114,7 @@ export default function NewProjectPage() {
           setFielderRateSource("Fielder default rate");
         }
       });
-  }, [fielderId, stateCode, fielders]);
+  }, [fielderId, stateCode, fielders, canSeeMoney]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -135,17 +137,22 @@ export default function NewProjectPage() {
       sqft: sqftValue,
       buriedSqft: buriedSqft === "" ? null : Number(buriedSqft),
       aerialSqft: aerialSqft === "" ? null : Number(aerialSqft),
-      clientSqftRate: clientSqftRate,
       dueDate: form.get("dueDate") || undefined,
       notes: form.get("notes") || undefined,
     };
+    if (canSeeMoney) {
+      payload.clientSqftRate = clientSqftRate;
+    }
 
     if (fielderId) {
-      payload.assignment = {
+      const assignment: Record<string, unknown> = {
         fielderId,
-        fielderSqftRate: fielderSqftRate || 0,
         ...(assignedSqft ? { assignedSqft: Number(assignedSqft) } : {}),
       };
+      if (canSeeMoney) {
+        assignment.fielderSqftRate = fielderSqftRate || 0;
+      }
+      payload.assignment = assignment;
     }
 
     const res = await fetch("/api/v1/projects", {
@@ -169,7 +176,7 @@ export default function NewProjectPage() {
     <>
       <Header
         title="New Project"
-        subtitle="Create a project with SQFT billing"
+        subtitle="Create a project and assign fielders"
         backHref="/projects"
         backLabel="Back to projects"
       />
@@ -252,7 +259,7 @@ export default function NewProjectPage() {
                 onChange={(e) => setSqft(e.target.value)}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Billing uses total SQFT. Optional split below for buried/aerial jobs.
+                Optional split below for buried/aerial jobs.
               </p>
             </div>
             <div>
@@ -282,24 +289,26 @@ export default function NewProjectPage() {
                 Filling both auto-sets total (e.g. 15,000 + 5,000 = 20,000).
               </p>
             </div>
-            <div>
-              <label className="label">Client Rate ($/SQFT) *</label>
-              <input
-                value={clientSqftRate}
-                onChange={(e) => {
-                  setClientSqftRate(e.target.value);
-                  setRateSource("Manual override");
-                }}
-                type="number"
-                step="0.0001"
-                min="0"
-                required
-                className="w-full"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Auto-filled from {rateSource}. You can override manually.
-              </p>
-            </div>
+            {canSeeMoney ? (
+              <div>
+                <label className="label">Client Rate ($/SQFT) *</label>
+                <input
+                  value={clientSqftRate}
+                  onChange={(e) => {
+                    setClientSqftRate(e.target.value);
+                    setRateSource("Manual override");
+                  }}
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  required
+                  className="w-full"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Auto-filled from {rateSource}. You can override manually.
+                </p>
+              </div>
+            ) : null}
             <div>
               <label className="label">ECD (Estimated Completion Date)</label>
               <input name="dueDate" type="date" className="w-full" />
@@ -337,26 +346,28 @@ export default function NewProjectPage() {
               </div>
               {fielderId && (
                 <>
-                  <div>
-                    <label className="label">Fielder Rate ($/SQFT) *</label>
-                    <input
-                      value={fielderSqftRate}
-                      onChange={(e) => {
-                        setFielderSqftRate(e.target.value);
-                        setFielderRateSource("Manual override");
-                      }}
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      required
-                      className="w-full"
-                    />
-                    {fielderRateSource && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Auto-filled from {fielderRateSource}.
-                      </p>
-                    )}
-                  </div>
+                  {canSeeMoney ? (
+                    <div>
+                      <label className="label">Fielder Rate ($/SQFT) *</label>
+                      <input
+                        value={fielderSqftRate}
+                        onChange={(e) => {
+                          setFielderSqftRate(e.target.value);
+                          setFielderRateSource("Manual override");
+                        }}
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        required
+                        className="w-full"
+                      />
+                      {fielderRateSource && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Auto-filled from {fielderRateSource}.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                   <div>
                     <label className="label">Assigned SQFT</label>
                     <input
@@ -381,7 +392,11 @@ export default function NewProjectPage() {
           <div className="flex flex-wrap gap-3">
             <button
               type="submit"
-              disabled={loading || !clientId || (Boolean(fielderId) && !fielderSqftRate)}
+              disabled={
+                loading ||
+                !clientId ||
+                (canSeeMoney && Boolean(fielderId) && !fielderSqftRate)
+              }
               className="btn-primary"
             >
               {loading

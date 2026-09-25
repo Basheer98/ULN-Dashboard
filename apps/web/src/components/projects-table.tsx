@@ -45,7 +45,13 @@ function formatMoney(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
+export function ProjectsTable({
+  projects,
+  canSeeMoney = true,
+}: {
+  projects: ProjectRow[];
+  canSeeMoney?: boolean;
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const allIds = useMemo(() => projects.map((p) => p.id), [projects]);
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
@@ -67,19 +73,35 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   function exportSelected() {
     const rows = projects.filter((p) => selected.has(p.id));
     if (rows.length === 0) return;
+    const headers = canSeeMoney
+      ? ["Project #", "Title", "Client", "State", "Status", "SQFT", "Client Bill", "ECD", "Fielder"]
+      : ["Project #", "Title", "Client", "State", "Status", "SQFT", "ECD", "Fielder"];
     downloadCsv("projects.csv", [
-      ["Project #", "Title", "Client", "State", "Status", "SQFT", "Client Bill", "ECD", "Fielder"],
-      ...rows.map((p) => [
-        p.projectNumber,
-        p.title,
-        p.clientName,
-        p.state,
-        p.status,
-        String(p.sqft),
-        String(p.clientBill),
-        p.dueDate ? new Date(p.dueDate).toLocaleDateString() : "",
-        p.fielderName ?? "",
-      ]),
+      headers,
+      ...rows.map((p) =>
+        canSeeMoney
+          ? [
+              p.projectNumber,
+              p.title,
+              p.clientName,
+              p.state,
+              p.status,
+              String(p.sqft),
+              String(p.clientBill),
+              p.dueDate ? new Date(p.dueDate).toLocaleDateString() : "",
+              p.fielderName ?? "",
+            ]
+          : [
+              p.projectNumber,
+              p.title,
+              p.clientName,
+              p.state,
+              p.status,
+              String(p.sqft),
+              p.dueDate ? new Date(p.dueDate).toLocaleDateString() : "",
+              p.fielderName ?? "",
+            ]
+      ),
     ]);
   }
 
@@ -139,10 +161,12 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                 <p className="text-xs text-muted-foreground">SQFT</p>
                 <p>{project.sqft.toLocaleString()}</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Bill</p>
-                <p>{formatMoney(project.clientBill)}</p>
-              </div>
+              {canSeeMoney ? (
+                <div>
+                  <p className="text-xs text-muted-foreground">Bill</p>
+                  <p>{formatMoney(project.clientBill)}</p>
+                </div>
+              ) : null}
               <div>
                 <p className="text-xs text-muted-foreground">ECD</p>
                 <p>{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "—"}</p>
@@ -173,7 +197,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                 <th>State</th>
                 <th>QField</th>
                 <th>SQFT</th>
-                <th>Client Bill</th>
+                {canSeeMoney ? <th>Client Bill</th> : null}
                 <th>ECD</th>
                 <th>Fielder</th>
                 <th>Status</th>
@@ -213,7 +237,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
                       </p>
                     )}
                   </td>
-                  <td>{formatMoney(project.clientBill)}</td>
+                  {canSeeMoney ? <td>{formatMoney(project.clientBill)}</td> : null}
                   <td>{project.dueDate ? new Date(project.dueDate).toLocaleDateString() : "—"}</td>
                   <td>{project.fielderName || "—"}</td>
                   <td>

@@ -36,6 +36,10 @@ export async function assignFielderToProject(
     );
   }
 
+  if (data.fielderSqftRate === undefined) {
+    throw new ApiError("fielderSqftRate is required", 400);
+  }
+
   const assignment = await prisma.assignment.create({
     data: {
       projectId,

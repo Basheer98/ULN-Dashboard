@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { lineItemSchema } from "@uln/shared";
+import { canViewProjectFinancials, lineItemSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
@@ -12,6 +12,9 @@ export async function POST(
 ) {
   try {
     const user = requirePermission(await getRequestUser(request), "projects:write");
+    if (!canViewProjectFinancials(user.role)) {
+      return jsonError("Forbidden", 403);
+    }
     const { id: projectId } = await params;
 
     const project = await prisma.project.findFirst({

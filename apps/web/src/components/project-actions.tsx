@@ -32,24 +32,16 @@ interface ProjectData {
   }>;
 }
 
-interface Financials {
-  fielders: Array<{
-    fielderId: string;
-    fielderName: string;
-    total: number;
-  }>;
-}
-
 export function ProjectActions({
   project,
   projectState,
   fielders,
-  financials,
+  canSeeMoney = true,
 }: {
   project: ProjectData;
   projectState?: string | null;
   fielders: FielderOption[];
-  financials: Financials;
+  canSeeMoney?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -64,11 +56,13 @@ export function ProjectActions({
     setLoading(true);
     setError("");
 
-    const fielder = fielders.find((f) => f.id === selectedFielder);
     const body: Record<string, unknown> = {
       fielderId: selectedFielder,
-      fielderSqftRate: fielderRate || fielder?.defaultSqftRate || 0,
     };
+    if (canSeeMoney) {
+      const fielder = fielders.find((f) => f.id === selectedFielder);
+      body.fielderSqftRate = fielderRate || fielder?.defaultSqftRate || 0;
+    }
     if (assignedSqft) body.assignedSqft = Number(assignedSqft);
 
     const res = await fetch(`/api/v1/projects/${project.id}/assignments`, {
@@ -149,8 +143,9 @@ export function ProjectActions({
                     {a.fielder.firstName} {a.fielder.lastName}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatRate(a.fielderSqftRate)}/SQFT
-                    {a.assignedSqft ? ` · ${Number(a.assignedSqft).toLocaleString()} SQFT` : ""}
+                    {canSeeMoney ? `${formatRate(a.fielderSqftRate)}/SQFT` : null}
+                    {canSeeMoney && a.assignedSqft ? " · " : null}
+                    {a.assignedSqft ? `${Number(a.assignedSqft).toLocaleString()} SQFT` : ""}
                   </p>
                 </div>
                 <StatusBadge status={a.status} />
@@ -166,7 +161,7 @@ export function ProjectActions({
             onChange={async (e) => {
               const id = e.target.value;
               setSelectedFielder(id);
-              if (!id) return;
+              if (!id || !canSeeMoney) return;
               const params = new URLSearchParams();
               if (projectState) params.set("state", projectState);
               params.set("fielderId", id);
@@ -190,15 +185,17 @@ export function ProjectActions({
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
           </select>
-          <input
-            value={fielderRate}
-            onChange={(e) => setFielderRate(e.target.value)}
-            type="number"
-            step="0.0001"
-            min="0"
-            placeholder="Fielder rate ($/SQFT)"
-            className="w-full"
-          />
+          {canSeeMoney && (
+            <input
+              value={fielderRate}
+              onChange={(e) => setFielderRate(e.target.value)}
+              type="number"
+              step="0.0001"
+              min="0"
+              placeholder="Fielder rate ($/SQFT)"
+              className="w-full"
+            />
+          )}
           <input
             value={assignedSqft}
             onChange={(e) => setAssignedSqft(e.target.value)}
@@ -214,50 +211,52 @@ export function ProjectActions({
         </form>
       </div>
 
-      <div className="card">
-        <h2 className="mb-4 font-semibold text-foreground">Additional Billing</h2>
-        {project.lineItems.length === 0 ? (
-          <p className="mb-4 text-sm text-muted-foreground">No additional line items.</p>
-        ) : (
-          <ul className="mb-4 space-y-2 text-sm">
-            {project.lineItems.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 rounded-lg bg-surface-elevated px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span className="min-w-0">
-                  {item.description}{" "}
-                  <span className="text-xs text-muted-foreground">
-                    ({item.type.replace(/_/g, " ")})
+      {canSeeMoney ? (
+        <div className="card">
+          <h2 className="mb-4 font-semibold text-foreground">Additional Billing</h2>
+          {project.lineItems.length === 0 ? (
+            <p className="mb-4 text-sm text-muted-foreground">No additional line items.</p>
+          ) : (
+            <ul className="mb-4 space-y-2 text-sm">
+              {project.lineItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-2 rounded-lg bg-surface-elevated px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0">
+                    {item.description}{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({item.type.replace(/_/g, " ")})
+                    </span>
                   </span>
-                </span>
-                <span>{formatCurrency(item.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+                  <span>{formatCurrency(item.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
 
-        <form onSubmit={addLineItem} className="space-y-3 border-t border-border pt-4">
-          <h3 className="text-sm font-medium text-foreground">Add Line Item</h3>
-          <select name="type" required className="w-full">
-            <option value="client_billing">Client billing (extra charge)</option>
-            <option value="fielder_payout">Fielder payout (extra pay)</option>
-          </select>
-          <input name="description" required placeholder="Description" className="w-full" />
-          <input name="amount" type="number" step="0.01" required placeholder="Amount" className="w-full" />
-          <select name="fielderId" className="w-full">
-            <option value="">Fielder (optional, for payout)</option>
-            {fielders.map((f) => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            Add Line Item
-          </button>
-        </form>
-      </div>
+          <form onSubmit={addLineItem} className="space-y-3 border-t border-border pt-4">
+            <h3 className="text-sm font-medium text-foreground">Add Line Item</h3>
+            <select name="type" required className="w-full">
+              <option value="client_billing">Client billing (extra charge)</option>
+              <option value="fielder_payout">Fielder payout (extra pay)</option>
+            </select>
+            <input name="description" required placeholder="Description" className="w-full" />
+            <input name="amount" type="number" step="0.01" required placeholder="Amount" className="w-full" />
+            <select name="fielderId" className="w-full">
+              <option value="">Fielder (optional, for payout)</option>
+              {fielders.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+            <button type="submit" disabled={loading} className="btn-primary w-full">
+              Add Line Item
+            </button>
+          </form>
+        </div>
+      ) : null}
 
-      <div className="card lg:col-span-2">
+      <div className={`card ${canSeeMoney ? "lg:col-span-2" : "lg:col-span-2"}`}>
         <h2 className="mb-4 font-semibold text-foreground">Project Status</h2>
         <div className="flex flex-wrap gap-2">
           {["draft", "assigned", "in_progress", "complete", "invoiced", "paid", "cancelled"].map((status) => (

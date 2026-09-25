@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getProjectFinancials, serializeProject } from "@/lib/projects";
 import { getEntityActivity } from "@/lib/activity-log";
 import { getSessionUser } from "@/lib/auth";
-import { formatCurrency, hasPermission, toNumber } from "@uln/shared";
+import { formatCurrency, hasPermission, canViewProjectFinancials, toNumber } from "@uln/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -21,6 +21,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "projects:write") : false;
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const project = await prisma.project.findFirst({
     where: { id, deletedAt: null },
@@ -34,7 +35,7 @@ export default async function ProjectDetailPage({
   if (!project) notFound();
 
   const [financials, fielders, activities] = await Promise.all([
-    getProjectFinancials(id),
+    canSeeMoney ? getProjectFinancials(id) : Promise.resolve(null),
     prisma.fielder.findMany({
       where: { isActive: true },
       orderBy: { lastName: "asc" },
@@ -50,18 +51,20 @@ export default async function ProjectDetailPage({
     assignments: data.assignments.map((a: (typeof data.assignments)[number]) => ({
       id: a.id,
       fielderId: a.fielderId,
-      fielderSqftRate: toNumber(a.fielderSqftRate),
+      fielderSqftRate: canSeeMoney ? toNumber(a.fielderSqftRate) : 0,
       assignedSqft: toNumber(a.assignedSqft),
       status: a.status,
       fielder: { firstName: a.fielder.firstName, lastName: a.fielder.lastName },
     })),
-    lineItems: data.lineItems.map((item: (typeof data.lineItems)[number]) => ({
-      id: item.id,
-      type: item.type,
-      description: item.description,
-      amount: toNumber(item.amount),
-      fielderId: item.fielderId,
-    })),
+    lineItems: canSeeMoney
+      ? data.lineItems.map((item: (typeof data.lineItems)[number]) => ({
+          id: item.id,
+          type: item.type,
+          description: item.description,
+          amount: toNumber(item.amount),
+          fielderId: item.fielderId,
+        }))
+      : [],
   };
 
   const dueDateValue = project.dueDate
@@ -80,7 +83,8 @@ export default async function ProjectDetailPage({
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge status={project.status} />
           <span className="text-sm text-muted-foreground">{project.client.name}</span>
-          {(project.status === "complete" || project.status === "invoiced") && (
+          {(canSeeMoney &&
+            (project.status === "complete" || project.status === "invoiced")) && (
             <>
               <GenerateInvoiceButton projectId={project.id} />
               <GeneratePaymentsButton projectId={project.id} />
@@ -99,8 +103,8 @@ export default async function ProjectDetailPage({
           )}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="card space-y-3 lg:col-span-2">
+        <div className={`grid gap-6 ${canSeeMoney ? "lg:grid-cols-3" : ""}`}>
+          <div className={`card space-y-3 ${canSeeMoney ? "lg:col-span-2" : ""}`}>
             <h2 className="font-semibold text-foreground">Site Details</h2>
             <p className="text-sm">{project.siteAddress}</p>
             <p className="text-sm text-muted-foreground">
@@ -143,36 +147,39 @@ export default async function ProjectDetailPage({
             )}
           </div>
 
-          <div className="card space-y-3">
-            <h2 className="font-semibold text-foreground">Financials</h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Client SQFT bill</span>
-                <span>{formatCurrency(financials.client.sqftAmount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Additional billing</span>
-                <span>{formatCurrency(financials.client.lineItemsTotal)}</span>
-              </div>
-              <div className="flex justify-between font-semibold">
-                <span>Client total</span>
-                <span className="text-success">{formatCurrency(financials.client.total)}</span>
-              </div>
-              <hr className="my-2 border-border" />
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Fielder pay</span>
-                <span>{formatCurrency(financials.totalFielderPay)}</span>
-              </div>
-              <div className="flex justify-between font-semibold">
-                <span>Est. margin</span>
-                <span className="text-accent">{formatCurrency(financials.margin)}</span>
+          {canSeeMoney && financials ? (
+            <div className="card space-y-3">
+              <h2 className="font-semibold text-foreground">Financials</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Client SQFT bill</span>
+                  <span>{formatCurrency(financials.client.sqftAmount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Additional billing</span>
+                  <span>{formatCurrency(financials.client.lineItemsTotal)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Client total</span>
+                  <span className="text-success">{formatCurrency(financials.client.total)}</span>
+                </div>
+                <hr className="my-2 border-border" />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fielder pay</span>
+                  <span>{formatCurrency(financials.totalFielderPay)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>Est. margin</span>
+                  <span className="text-accent">{formatCurrency(financials.margin)}</span>
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </div>
 
         {canWrite && (
           <ProjectEditForm
+            canSeeMoney={canSeeMoney}
             project={{
               id: project.id,
               projectNumber: project.projectNumber,
@@ -198,14 +205,14 @@ export default async function ProjectDetailPage({
 
         {canWrite ? (
           <ProjectActions
+            canSeeMoney={canSeeMoney}
             project={projectForActions}
             projectState={project.state}
             fielders={fielders.map((f) => ({
               id: f.id,
               name: `${f.firstName} ${f.lastName}`,
-              defaultSqftRate: toNumber(f.defaultSqftRate),
+              defaultSqftRate: canSeeMoney ? toNumber(f.defaultSqftRate) : 0,
             }))}
-            financials={financials}
           />
         ) : (
           <div className="card">
