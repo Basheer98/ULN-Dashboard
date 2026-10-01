@@ -117,6 +117,70 @@ export async function ensureProductionSchema(): Promise<{ ok: boolean; steps: st
       `CREATE INDEX IF NOT EXISTS "fielder_payment_events_payment_id_paid_at_idx" ON "fielder_payment_events"("payment_id", "paid_at")`
     );
 
+    await run(
+      "operating_costs",
+      `CREATE TABLE IF NOT EXISTS "operating_costs" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "category_id" TEXT,
+        "amount" DECIMAL(14,2) NOT NULL,
+        "frequency" TEXT NOT NULL DEFAULT 'monthly',
+        "start_date" TIMESTAMP(3),
+        "end_date" TIMESTAMP(3),
+        "is_active" BOOLEAN NOT NULL DEFAULT true,
+        "notes" TEXT,
+        "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "operating_costs_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await run(
+      "operating_costs_is_active_idx",
+      `CREATE INDEX IF NOT EXISTS "operating_costs_is_active_idx" ON "operating_costs"("is_active")`
+    );
+    await run(
+      "operating_costs_category_id_idx",
+      `CREATE INDEX IF NOT EXISTS "operating_costs_category_id_idx" ON "operating_costs"("category_id")`
+    );
+    await run(
+      "sessions",
+      `CREATE TABLE IF NOT EXISTS "sessions" (
+        "id" TEXT NOT NULL,
+        "user_id" TEXT NOT NULL,
+        "client" TEXT NOT NULL DEFAULT 'web',
+        "ip_address" TEXT,
+        "user_agent" TEXT,
+        "expires_at" TIMESTAMP(3) NOT NULL,
+        "revoked_at" TIMESTAMP(3),
+        "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await run(
+      "sessions_user_id_idx",
+      `CREATE INDEX IF NOT EXISTS "sessions_user_id_idx" ON "sessions"("user_id")`
+    );
+    await run(
+      "login_attempts",
+      `CREATE TABLE IF NOT EXISTS "login_attempts" (
+        "id" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "ip_address" TEXT,
+        "success" BOOLEAN NOT NULL,
+        "reason" TEXT,
+        "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "login_attempts_pkey" PRIMARY KEY ("id")
+      )`
+    );
+    await run(
+      "login_attempts_email_created_at_idx",
+      `CREATE INDEX IF NOT EXISTS "login_attempts_email_created_at_idx" ON "login_attempts"("email", "created_at")`
+    );
+    await run(
+      "login_attempts_ip_address_created_at_idx",
+      `CREATE INDEX IF NOT EXISTS "login_attempts_ip_address_created_at_idx" ON "login_attempts"("ip_address", "created_at")`
+    );
+
     // Enums — best-effort (PG 15+ IF NOT EXISTS)
     for (const [label, sql] of [
       ["enum.PaymentStatus.partial", `ALTER TYPE "PaymentStatus" ADD VALUE IF NOT EXISTS 'partial'`],

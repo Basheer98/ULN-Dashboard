@@ -1,4 +1,5 @@
-import { Header, StatusBadge } from "@/components/layout";
+import { redirect } from "next/navigation";
+import { Header } from "@/components/layout";
 import {
   ChartCard,
   SqftAreaChart,
@@ -6,27 +7,114 @@ import {
   TopFieldersChart,
 } from "@/components/charts";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
 import { getDashboardAnalytics } from "@/lib/analytics";
+import { getDashboardData, type BreakEvenProgress, type Trend } from "@/lib/dashboard";
 import { getOverdueItems } from "@/lib/overdue";
 import { formatCurrency, toNumber } from "@uln/shared";
 import Link from "next/link";
 
+function formatNumber(value: number): string {
+  return Math.round(value).toLocaleString();
+}
+
+function TrendLine({ trend }: { trend: Trend }) {
+  const { current, previous } = trend;
+  if (previous === 0) {
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        {current === 0 ? "None yet, same as last month" : "None at this point last month"}
+      </p>
+    );
+  }
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  const rounded = Math.round(change);
+  const tone = rounded > 0 ? "text-success" : rounded < 0 ? "text-danger" : "text-muted-foreground";
+  const arrow = rounded > 0 ? "↑" : rounded < 0 ? "↓" : "→";
+  return (
+    <p className={`mt-1 text-xs ${tone}`}>
+      {arrow} {Math.abs(rounded)}% vs same point last month
+    </p>
+  );
+}
+
+type Card = {
+  label: string;
+  value: string;
+  href: string;
+  hint?: string;
+  trend?: Trend;
+};
+
+function BreakEvenCard({ progress, monthLabel }: { progress: BreakEvenProgress; monthLabel: string }) {
+  if (progress.state !== "ready") {
+    return (
+      <section className="card flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-semibold text-foreground">Break-even Progress</h2>
+          <p className="text-sm text-muted-foreground">
+            {progress.state === "no_costs"
+              ? "Add your recurring operating costs to see how much SQFT you need each month to cover them."
+              : "Break-even needs completed projects from the last 3 months to work out your margin per SQFT."}
+          </p>
+        </div>
+        <Link href="/finance/operations" className="link shrink-0 text-sm">
+          {progress.state === "no_costs" ? "Set up operating costs" : "Open Operations Cost"}
+        </Link>
+      </section>
+    );
+  }
+
+  const { targetSqft, completedSqft, monthProgress } = progress;
+  const pct = targetSqft > 0 ? completedSqft / targetSqft : 0;
+  const expected = targetSqft * monthProgress;
+  const reached = completedSqft >= targetSqft;
+  const onPace = completedSqft >= expected;
+  const barTone = reached ? "bg-success" : onPace ? "bg-accent" : "bg-warning";
+
+  return (
+    <section className="card space-y-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+        <h2 className="font-semibold text-foreground">Break-even Progress — {monthLabel}</h2>
+        <Link href="/finance/operations" className="link text-sm">
+          Operations Cost
+        </Link>
+      </div>
+      <div className="relative h-3 overflow-hidden rounded-full bg-surface-hover">
+        <div className={`h-full ${barTone}`} style={{ width: `${Math.min(100, pct * 100)}%` }} />
+        {!reached && (
+          <div
+            className="absolute top-0 h-full w-0.5 bg-foreground/60"
+            style={{ left: `${Math.min(100, monthProgress * 100)}%` }}
+            title="Where you should be by today"
+          />
+        )}
+      </div>
+      <p className="text-sm">
+        <span className="font-semibold">{formatNumber(completedSqft)}</span> of{" "}
+        {formatNumber(targetSqft)} SQFT completed ({Math.round(pct * 100)}%).{" "}
+        <span className={reached || onPace ? "text-success" : "text-warning"}>
+          {reached
+            ? "Break-even reached — everything from here is profit."
+            : onPace
+              ? "On pace to break even."
+              : `Behind pace by ${formatNumber(expected - completedSqft)} SQFT.`}
+        </span>
+      </p>
+      <p className="text-xs text-muted-foreground">
+        The target uses your fixed costs and average margin per SQFT from the last 3 full months. The line
+        marks where you should be by today.
+      </p>
+    </section>
+  );
+}
+
 export default async function DashboardPage() {
-  const [
-    activeProjects,
-    completedProjects,
-    pendingPayments,
-    unpaidInvoices,
-    recentProjects,
-    analytics,
-    overdue,
-  ] = await Promise.all([
-    prisma.project.count({
-      where: { deletedAt: null, status: { in: ["assigned", "in_progress"] } },
-    }),
-    prisma.project.count({ where: { deletedAt: null, status: "complete" } }),
-    prisma.fielderPayment.count({ where: { status: { in: ["pending", "approved"] } } }),
-    prisma.invoice.count({ where: { deletedAt: null, status: { in: ["sent", "overdue", "partial"] } } }),
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+
+  const [data, recentProjects, analytics, overdue] = await Promise.all([
+    getDashboardData(user.role),
     prisma.project.findMany({
       where: { deletedAt: null },
       take: 5,
@@ -37,20 +125,68 @@ export default async function DashboardPage() {
     getOverdueItems(),
   ]);
 
-  const { totals } = analytics;
-  const hasOverdue =
-    overdue.overdueInvoices.length > 0 || overdue.overdueProjects.length > 0;
+  const { trends, canSeeMoney } = data;
+  const overdueInvoices = data.canSeeInvoices ? overdue.overdueInvoices : [];
+  const hasOverdue = overdueInvoices.length > 0 || overdue.overdueProjects.length > 0;
 
-  const stats = [
-    { label: "Active Projects", value: activeProjects.toString(), href: "/projects" },
-    { label: "SQFT Completed", value: totals.completedSqft.toLocaleString(), href: "/reports" },
-    { label: "Fielders Working", value: totals.activeFielders.toString(), href: "/fielders" },
-    { label: "Est. Margin", value: formatCurrency(totals.margin), href: "/reports" },
-    { label: "Awaiting Invoice", value: completedProjects.toString(), href: "/projects" },
-    { label: "Pending Payouts", value: pendingPayments.toString(), href: "/payments" },
-    { label: "Unpaid Invoices", value: unpaidInvoices.toString(), href: "/invoices" },
-    { label: "Total SQFT", value: totals.totalSqft.toLocaleString(), href: "/reports" },
+  const cards: Card[] = [
+    { label: "Active Projects", value: data.activeProjectCount.toString(), href: "/projects" },
+    {
+      label: `SQFT Completed (${data.monthLabel})`,
+      value: formatNumber(trends.sqft.current),
+      href: "/reports",
+      trend: trends.sqft,
+    },
+    {
+      label: `Projects Completed (${data.monthLabel})`,
+      value: trends.completed.current.toString(),
+      href: "/projects",
+      trend: trends.completed,
+    },
+    { label: "Fielders Working", value: analytics.totals.activeFielders.toString(), href: "/fielders" },
   ];
+
+  if (canSeeMoney) {
+    if (trends.billed) {
+      cards.push({
+        label: `Billed (${data.monthLabel})`,
+        value: formatCurrency(trends.billed.current),
+        href: "/reports",
+        trend: trends.billed,
+      });
+    }
+    if (trends.margin) {
+      cards.push({
+        label: `Margin after fielder pay (${data.monthLabel})`,
+        value: formatCurrency(trends.margin.current),
+        href: "/finance/profitability",
+        trend: trends.margin,
+      });
+    }
+    if (data.unpaidInvoices) {
+      cards.push({
+        label: "Unpaid Invoices",
+        value: formatCurrency(data.unpaidInvoices.amount),
+        hint: `${data.unpaidInvoices.count} invoice${data.unpaidInvoices.count === 1 ? "" : "s"}`,
+        href: "/invoices",
+      });
+    }
+    if (data.cashOnHand != null) {
+      cards.push({ label: "Cash on Hand", value: formatCurrency(data.cashOnHand), href: "/finance" });
+    }
+  } else {
+    cards.push(
+      {
+        label: `New Projects (${data.monthLabel})`,
+        value: trends.created.current.toString(),
+        href: "/projects",
+        trend: trends.created,
+      },
+      { label: "Unassigned Projects", value: data.unassignedProjects.toString(), href: "/projects?status=draft" },
+      { label: "Due This Week", value: data.dueThisWeek.toString(), href: "/schedule" },
+      { label: "Active Pipeline SQFT", value: formatNumber(data.pipelineSqft), href: "/projects" }
+    );
+  }
 
   return (
     <>
@@ -63,11 +199,11 @@ export default async function DashboardPage() {
               <Link href="/schedule" className="link text-sm">View schedule</Link>
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
-              {overdue.overdueInvoices.length > 0 && (
+              {overdueInvoices.length > 0 && (
                 <div>
                   <h3 className="mb-2 text-sm font-medium text-danger">Past-due invoices</h3>
                   <ul className="space-y-2 text-sm">
-                    {overdue.overdueInvoices.slice(0, 5).map((inv) => (
+                    {overdueInvoices.slice(0, 5).map((inv) => (
                       <li key={inv.id} className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:gap-3">
                         <span className="min-w-0 truncate">{inv.invoiceNumber} — {inv.client.name}</span>
                         <span className="shrink-0 font-medium">{formatCurrency(toNumber(inv.totalAmount))}</span>
@@ -96,26 +232,58 @@ export default async function DashboardPage() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map((stat) => (
-            <Link key={stat.label} href={stat.href} className="stat-card">
-              <p className="text-sm text-muted-foreground">{stat.label}</p>
-              <p className="mt-2 text-2xl font-semibold text-foreground">{stat.value}</p>
+          {cards.map((card) => (
+            <Link key={card.label} href={card.href} className="stat-card">
+              <p className="text-sm text-muted-foreground">{card.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
+              {card.trend && <TrendLine trend={card.trend} />}
+              {card.hint && <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>}
             </Link>
           ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <ChartCard title="SQFT Completed" subtitle="Last 6 months" className="lg:col-span-2">
-            <SqftAreaChart data={analytics.sqftByMonth} />
-          </ChartCard>
+          <section className="card lg:col-span-1">
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Needs Attention</h2>
+            {data.attention.length === 0 ? (
+              <p className="text-sm text-muted-foreground">All caught up — nothing waiting on you.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {data.attention.map((item) => (
+                  <li key={item.key}>
+                    <Link
+                      href={item.href}
+                      className="flex items-center justify-between gap-3 py-2.5 text-sm hover:text-accent"
+                    >
+                      <span className="min-w-0">
+                        <span className="block">{item.label}</span>
+                        {item.amount != null && item.amount > 0 && (
+                          <span className="block text-xs text-muted-foreground">{formatCurrency(item.amount)}</span>
+                        )}
+                      </span>
+                      <span className="badge badge-warning shrink-0">{item.count}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <div className="space-y-6 lg:col-span-2">
+            {data.breakEven && <BreakEvenCard progress={data.breakEven} monthLabel={data.monthLabel} />}
+            <ChartCard title="SQFT Completed" subtitle="Last 6 months">
+              <SqftAreaChart data={analytics.sqftByMonth} />
+            </ChartCard>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
           <ChartCard title="Projects by Status" subtitle="Current pipeline">
             <StatusDonut data={analytics.projectsByStatus} />
           </ChartCard>
+          <ChartCard title="Top Fielders by SQFT" subtitle="Across all assigned jobs" className="lg:col-span-2">
+            <TopFieldersChart data={analytics.topFielders} />
+          </ChartCard>
         </div>
-
-        <ChartCard title="Top Fielders by SQFT" subtitle="Across all assigned jobs">
-          <TopFieldersChart data={analytics.topFielders} />
-        </ChartCard>
 
         <section className="card">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -131,13 +299,12 @@ export default async function DashboardPage() {
                     <th>Project</th>
                     <th>Client</th>
                     <th>SQFT</th>
-                    <th>Client Bill</th>
+                    {canSeeMoney && <th>Client Bill</th>}
                     <th>Fielder</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentProjects.map((project) => {
-                    const bill = toNumber(project.sqft) * toNumber(project.clientSqftRate);
                     const fielder = project.assignments[0]?.fielder;
                     return (
                       <tr key={project.id}>
@@ -149,7 +316,9 @@ export default async function DashboardPage() {
                         </td>
                         <td>{project.client.name}</td>
                         <td>{toNumber(project.sqft).toLocaleString()}</td>
-                        <td>{formatCurrency(bill)}</td>
+                        {canSeeMoney && (
+                          <td>{formatCurrency(toNumber(project.sqft) * toNumber(project.clientSqftRate))}</td>
+                        )}
                         <td>{fielder ? `${fielder.firstName} ${fielder.lastName}` : "—"}</td>
                       </tr>
                     );

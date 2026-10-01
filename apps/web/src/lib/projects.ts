@@ -25,6 +25,23 @@ export async function getProjectFinancials(projectId: string) {
     throw new Error("Project not found");
   }
 
+  return computeProjectFinancials(project);
+}
+
+type ProjectFinancialsRecord = {
+  sqft: unknown;
+  clientSqftRate: unknown;
+  lineItems: { type: string; amount: unknown; fielderId: string | null }[];
+  assignments: {
+    id: string;
+    fielderId: string;
+    fielderSqftRate: unknown;
+    assignedSqft: unknown;
+    fielder: { firstName: string; lastName: string; employmentType: string };
+  }[];
+};
+
+export function computeProjectFinancials(project: ProjectFinancialsRecord) {
   const sqft = toNumber(project.sqft);
   const clientRate = toNumber(project.clientSqftRate);
 

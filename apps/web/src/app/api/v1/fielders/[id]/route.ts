@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { fielderSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser } from "@/lib/auth";
+import { getRequestUser, revokeUserSessions } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
 import { serializeProject } from "@/lib/projects";
 
@@ -68,6 +68,9 @@ export async function DELETE(
       where: { id },
       data: { isActive: false },
     });
+
+    const linkedUser = await prisma.user.findUnique({ where: { fielderId: id }, select: { id: true } });
+    if (linkedUser) await revokeUserSessions(linkedUser.id);
 
     return jsonOk(serializeProject(fielder));
   } catch (error) {

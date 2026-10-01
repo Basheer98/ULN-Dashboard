@@ -20,12 +20,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get("uln_session")?.value;
+  // Only a cheap presence check here; the session itself is validated against the
+  // database by the dashboard layout, which sends revoked or expired sessions to /login.
   if (!token && !pathname.startsWith("/login")) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  if (token && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();

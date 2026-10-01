@@ -82,6 +82,10 @@ export default function SettingsScreen() {
   );
 
   async function handleLogout() {
+    const token = await getToken();
+    if (token) {
+      await apiRequest("/auth/logout", { method: "POST", token }).catch(() => undefined);
+    }
     await clearSession();
     router.replace("/login");
   }

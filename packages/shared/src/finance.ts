@@ -198,6 +198,114 @@ export const loanPaymentSchema = z.object({
   paymentMethodId: z.string().optional().nullable(),
 });
 
+export const OPERATING_COST_FREQUENCIES = ["weekly", "monthly", "quarterly", "annual"] as const;
+export type OperatingCostFrequency = (typeof OPERATING_COST_FREQUENCIES)[number];
+
+export const operatingCostSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  categoryId: z.string().optional().nullable(),
+  amount: z.coerce.number().positive("Amount must be greater than 0"),
+  frequency: z.enum(OPERATING_COST_FREQUENCIES).default("monthly"),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+const MONTHLY_FACTOR: Record<OperatingCostFrequency, number> = {
+  weekly: 52 / 12,
+  monthly: 1,
+  quarterly: 1 / 3,
+  annual: 1 / 12,
+};
+
+export function monthlyEquivalent(amount: number, frequency: string): number {
+  const factor = MONTHLY_FACTOR[frequency as OperatingCostFrequency] ?? 1;
+  return Math.round(amount * factor * 100) / 100;
+}
+
+/** True when the cost is active and its date range overlaps [monthStart, monthEnd]. */
+export function isOperatingCostActiveInMonth(
+  cost: { isActive: boolean; startDate?: Date | null; endDate?: Date | null },
+  monthStart: Date,
+  monthEnd: Date
+): boolean {
+  if (!cost.isActive) return false;
+  if (cost.startDate && cost.startDate > monthEnd) return false;
+  if (cost.endDate && cost.endDate < monthStart) return false;
+  return true;
+}
+
+export interface OperationsCostInput {
+  months: number;
+  sqftCompleted: number;
+  /** Billed value of work completed in the period. */
+  revenue: number;
+  fielderPay: number;
+  /** Recurring overhead plus loan interest and fees. */
+  fixedCosts: number;
+  /** Job-driven costs other than fielder pay (recorded expenses, mileage). */
+  otherVariableCosts: number;
+}
+
+export interface OperationsCostResult {
+  totalCost: number;
+  variableCosts: number;
+  monthlyFixed: number;
+  monthlyTotal: number;
+  sqftPerMonth: number;
+  netProfit: number;
+  margin: number;
+  revenuePerSqft: number | null;
+  fielderPayPerSqft: number | null;
+  otherVariablePerSqft: number | null;
+  overheadPerSqft: number | null;
+  costPerSqft: number | null;
+  contributionPerSqft: number | null;
+  breakEvenSqftPerMonth: number | null;
+}
+
+function perSqft(value: number, sqft: number): number | null {
+  return sqft > 0 ? Math.round((value / sqft) * 10000) / 10000 : null;
+}
+
+export function calculateOperationsCost(input: OperationsCostInput): OperationsCostResult {
+  const months = Math.max(1, input.months);
+  const sqft = Math.max(0, input.sqftCompleted);
+  const variableCosts = input.fielderPay + input.otherVariableCosts;
+  const totalCost = input.fixedCosts + variableCosts;
+  const netProfit = input.revenue - totalCost;
+  const monthlyFixed = input.fixedCosts / months;
+
+  const revenuePerSqft = perSqft(input.revenue, sqft);
+  const variablePerSqft = perSqft(variableCosts, sqft);
+  const contributionPerSqft =
+    revenuePerSqft != null && variablePerSqft != null
+      ? Math.round((revenuePerSqft - variablePerSqft) * 10000) / 10000
+      : null;
+  const breakEvenSqftPerMonth =
+    contributionPerSqft != null && contributionPerSqft > 0
+      ? Math.ceil(monthlyFixed / contributionPerSqft)
+      : null;
+
+  return {
+    totalCost,
+    variableCosts,
+    monthlyFixed,
+    monthlyTotal: totalCost / months,
+    sqftPerMonth: sqft / months,
+    netProfit,
+    margin: input.revenue > 0 ? Math.round((netProfit / input.revenue) * 10000) / 100 : 0,
+    revenuePerSqft,
+    fielderPayPerSqft: perSqft(input.fielderPay, sqft),
+    otherVariablePerSqft: perSqft(input.otherVariableCosts, sqft),
+    overheadPerSqft: perSqft(input.fixedCosts, sqft),
+    costPerSqft: perSqft(totalCost, sqft),
+    contributionPerSqft,
+    breakEvenSqftPerMonth,
+  };
+}
+
 export const ownerTransactionSchema = z.object({
   transactionType: z.enum(["owner_draw", "owner_contribution"]),
   transactionDate: z.string().min(1),
@@ -268,3 +376,4 @@ export function calculateReconciliationDifference(
 export type ExpenseInput = z.infer<typeof expenseSchema>;
 export type IncomeInput = z.infer<typeof incomeSchema>;
 export type MileageInput = z.infer<typeof mileageSchema>;
+export type OperatingCostInput = z.infer<typeof operatingCostSchema>;

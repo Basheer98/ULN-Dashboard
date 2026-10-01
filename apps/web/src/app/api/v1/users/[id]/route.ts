@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser } from "@/lib/auth";
+import { getRequestUser, revokeUserSessions } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
 import { serializeProject } from "@/lib/projects";
 
@@ -19,7 +19,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requirePermission(await getRequestUser(request), "users:write");
+    const actor = requirePermission(await getRequestUser(request), "users:write");
     const { id } = await params;
     const body = await request.json();
     const parsed = updateSchema.safeParse(body);
@@ -38,6 +38,11 @@ export async function PATCH(
         id: true, email: true, role: true, firstName: true, lastName: true, isActive: true,
       },
     });
+
+    if (parsed.data.password || parsed.data.isActive === false) {
+      await revokeUserSessions(id, actor.id === id ? actor.sessionId : undefined);
+    }
+
     return jsonOk(serializeProject(user));
   } catch (error) {
     return handleApiError(error);

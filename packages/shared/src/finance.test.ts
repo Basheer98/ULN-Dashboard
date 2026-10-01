@@ -7,6 +7,9 @@ import {
   calculateReconciliationDifference,
   sumDecimal,
   mileageSchema,
+  monthlyEquivalent,
+  isOperatingCostActiveInMonth,
+  calculateOperationsCost,
 } from "./finance";
 import { hasPermission, hasAnyFinanceAccess } from "./permissions";
 
@@ -109,5 +112,73 @@ describe("reimbursement workflow states", () => {
 
   it("blocks rejected to reimbursed", () => {
     expect(validTransitions.rejected).not.toContain("reimbursed");
+  });
+});
+
+describe("operations cost", () => {
+  it("normalises recurring costs to a monthly amount", () => {
+    expect(monthlyEquivalent(1200, "monthly")).toBe(1200);
+    expect(monthlyEquivalent(1200, "annual")).toBe(100);
+    expect(monthlyEquivalent(300, "quarterly")).toBe(100);
+    expect(monthlyEquivalent(100, "weekly")).toBe(433.33);
+  });
+
+  it("checks whether a recurring cost applies to a month", () => {
+    const start = new Date("2026-09-01T00:00:00Z");
+    const end = new Date("2026-09-30T23:59:59Z");
+    expect(isOperatingCostActiveInMonth({ isActive: true }, start, end)).toBe(true);
+    expect(isOperatingCostActiveInMonth({ isActive: false }, start, end)).toBe(false);
+    expect(
+      isOperatingCostActiveInMonth({ isActive: true, startDate: new Date("2026-10-01") }, start, end)
+    ).toBe(false);
+    expect(
+      isOperatingCostActiveInMonth({ isActive: true, endDate: new Date("2026-08-31") }, start, end)
+    ).toBe(false);
+  });
+
+  it("computes cost per sqft and break-even sqft", () => {
+    const result = calculateOperationsCost({
+      months: 1,
+      sqftCompleted: 10000,
+      revenue: 5000,
+      fielderPay: 2000,
+      fixedCosts: 1500,
+      otherVariableCosts: 500,
+    });
+    expect(result.totalCost).toBe(4000);
+    expect(result.netProfit).toBe(1000);
+    expect(result.margin).toBe(20);
+    expect(result.costPerSqft).toBe(0.4);
+    expect(result.overheadPerSqft).toBe(0.15);
+    expect(result.contributionPerSqft).toBe(0.25);
+    expect(result.breakEvenSqftPerMonth).toBe(6000);
+  });
+
+  it("averages fixed costs over multi-month periods", () => {
+    const result = calculateOperationsCost({
+      months: 3,
+      sqftCompleted: 30000,
+      revenue: 15000,
+      fielderPay: 6000,
+      fixedCosts: 4500,
+      otherVariableCosts: 1500,
+    });
+    expect(result.monthlyFixed).toBe(1500);
+    expect(result.sqftPerMonth).toBe(10000);
+    expect(result.breakEvenSqftPerMonth).toBe(6000);
+  });
+
+  it("returns null per-sqft figures when no work was completed", () => {
+    const result = calculateOperationsCost({
+      months: 1,
+      sqftCompleted: 0,
+      revenue: 0,
+      fielderPay: 0,
+      fixedCosts: 1000,
+      otherVariableCosts: 0,
+    });
+    expect(result.costPerSqft).toBeNull();
+    expect(result.breakEvenSqftPerMonth).toBeNull();
+    expect(result.netProfit).toBe(-1000);
   });
 });
