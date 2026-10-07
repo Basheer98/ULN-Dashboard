@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordInput } from "@/components/password-input";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -69,9 +70,8 @@ export default function LoginPage() {
             <label htmlFor="password" className="label">
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full"

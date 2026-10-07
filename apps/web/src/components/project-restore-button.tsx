@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function ProjectRestoreButton({
   projectId,
@@ -24,6 +25,7 @@ export function ProjectRestoreButton({
       setLoading(false);
       return;
     }
+    toast.success(`Project ${projectNumber} restored`);
     router.push(`/projects/${projectId}`);
     router.refresh();
   }

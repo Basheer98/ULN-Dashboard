@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
+import { PasswordInput } from "@/components/password-input";
 
 export function TeamUserForm() {
   const router = useRouter();
@@ -12,7 +14,8 @@ export function TeamUserForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
 
     const res = await fetch("/api/v1/users", {
       method: "POST",
@@ -33,7 +36,8 @@ export function TeamUserForm() {
       return;
     }
 
-    e.currentTarget.reset();
+    formEl.reset();
+    toast.success("Team member added");
     router.refresh();
     setLoading(false);
   }
@@ -46,7 +50,7 @@ export function TeamUserForm() {
         <input name="lastName" placeholder="Last name" className="w-full" />
       </div>
       <input name="email" type="email" required placeholder="Email" className="w-full" />
-      <input name="password" type="password" required minLength={6} placeholder="Password" className="w-full" />
+      <PasswordInput name="password" required minLength={6} placeholder="Password" className="w-full" autoComplete="new-password" />
       <select name="role" required className="w-full">
         <option value="dispatcher">Dispatcher</option>
         <option value="coordinator">Project Coordinator (project entry only, no finance)</option>

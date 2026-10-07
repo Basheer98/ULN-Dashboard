@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 
 interface TitleRow {
   id: string;
@@ -43,21 +44,26 @@ export function ProjectTitlesManager({ canEdit }: { canEdit: boolean }) {
       return;
     }
     setName("");
+    toast.success("Title added");
     await load();
   }
 
   async function deactivate(id: string) {
     if (!confirm("Remove this title from the catalog?")) return;
-    await fetch(`/api/v1/project-titles/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/project-titles/${id}`, { method: "DELETE" });
+    if (res.ok) toast.success("Title removed");
+    else toast.error("Failed to remove title");
     await load();
   }
 
   async function restore(id: string) {
-    await fetch(`/api/v1/project-titles/${id}`, {
+    const res = await fetch(`/api/v1/project-titles/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: true }),
     });
+    if (res.ok) toast.success("Title restored");
+    else toast.error("Failed to restore title");
     await load();
   }
 

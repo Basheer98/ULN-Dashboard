@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OPERATING_COST_FREQUENCIES, formatCurrency } from "@uln/shared";
 import type { RecurringCostRow } from "@/lib/operations-cost";
+import { toast } from "@/lib/toast";
 
 const FREQUENCY_LABELS: Record<string, string> = {
   weekly: "Weekly",
@@ -62,6 +63,7 @@ export function OperatingCostsManager({
       setError(data.error || "Failed to save cost");
       return;
     }
+    toast.success(editing ? "Cost updated" : "Cost added");
     resetForm();
     router.refresh();
   }
@@ -72,7 +74,12 @@ export function OperatingCostsManager({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !cost.isActive }),
     });
-    if (res.ok) router.refresh();
+    if (res.ok) {
+      toast.success(cost.isActive ? `${cost.name} paused` : `${cost.name} resumed`);
+      router.refresh();
+    } else {
+      toast.error("Failed to update cost");
+    }
   }
 
   async function remove(cost: RecurringCostRow) {
@@ -80,7 +87,10 @@ export function OperatingCostsManager({
     const res = await fetch(`/api/v1/finance/operating-costs/${cost.id}`, { method: "DELETE" });
     if (res.ok) {
       if (editing?.id === cost.id) resetForm();
+      toast.success(`${cost.name} deleted`);
       router.refresh();
+    } else {
+      toast.error("Failed to delete cost");
     }
   }
 

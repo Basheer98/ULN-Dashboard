@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatRate } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface FielderData {
   id: string;
@@ -51,6 +52,7 @@ export function FielderEditForm({ fielder }: { fielder: FielderData }) {
       return;
     }
     setOpen(false);
+    toast.success("Fielder updated");
     router.refresh();
   }
 

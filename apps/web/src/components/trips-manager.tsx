@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { US_STATES } from "@uln/shared";
 import { StatusBadge } from "@/components/layout";
+import { toast } from "@/lib/toast";
 
 interface Trip {
   id: string;
@@ -100,6 +101,7 @@ export function TripsManager() {
       setError(data.error || "Failed to create trip");
       return;
     }
+    toast.success("Trip created");
     setShowForm(false);
     setForm({
       name: "",

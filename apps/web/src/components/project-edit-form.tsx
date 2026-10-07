@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { US_STATES } from "@uln/shared";
 import { ProjectTitleField } from "@/components/project-title-field";
+import { toast } from "@/lib/toast";
 
 interface ClientOption {
   id: string;
@@ -133,6 +134,7 @@ export function ProjectEditForm({
 
     setSaved(true);
     setLoading(false);
+    toast.success("Project updated");
     router.refresh();
   }
 

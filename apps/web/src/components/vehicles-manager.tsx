@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "@/lib/toast";
 
 interface Vehicle {
   id: string;
@@ -58,6 +59,7 @@ export function VehiclesManager() {
       setError(data.error || "Failed to add vehicle");
       return;
     }
+    toast.success("Vehicle added");
     setForm({ name: "", licensePlate: "", make: "", model: "", year: "" });
     load();
     router.refresh();

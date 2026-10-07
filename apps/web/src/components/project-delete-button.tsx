@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function ProjectDeleteButton({
   projectId,
@@ -25,6 +26,7 @@ export function ProjectDeleteButton({
       setLoading(false);
       return;
     }
+    toast.success(`Project ${projectNumber} deleted`);
     router.push("/projects");
     router.refresh();
   }

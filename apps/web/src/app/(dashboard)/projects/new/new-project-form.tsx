@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout";
 import { ProjectTitleField } from "@/components/project-title-field";
 import { DEFAULT_CLIENT_SQFT_RATE, US_STATES } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface ClientOption {
   id: string;
@@ -178,6 +179,7 @@ export default function NewProjectPage({
       return;
     }
 
+    toast.success("Project created");
     router.push(`/projects/${data.id}`);
     router.refresh();
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout";
+import { toast } from "@/lib/toast";
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function NewClientPage() {
       return;
     }
 
+    toast.success("Client created");
     router.push(`/clients/${data.id}`);
     router.refresh();
   }

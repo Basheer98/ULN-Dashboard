@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function ReceiptVerifyActions({
   receiptId,
@@ -35,6 +36,7 @@ export function ReceiptVerifyActions({
       setError(data.error || "Verification failed");
       return;
     }
+    toast.success(action === "verified" ? "Receipt verified" : "Receipt rejected");
     setShowReject(false);
     router.refresh();
   }
@@ -112,6 +114,7 @@ export function ExpenseReceiptUpload({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Upload failed");
+      toast.success("Receipt attached");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -190,11 +193,11 @@ export function BatchReimbursePanel({
       setError(data.error || "Batch reimburse failed");
       return;
     }
-    setMessage(
-      `Reimbursed ${data.reimbursedCount} expense${data.reimbursedCount === 1 ? "" : "s"}${
-        data.skippedCount ? ` (${data.skippedCount} skipped)` : ""
-      }.`
-    );
+    const summary = `Reimbursed ${data.reimbursedCount} expense${data.reimbursedCount === 1 ? "" : "s"}${
+      data.skippedCount ? ` (${data.skippedCount} skipped)` : ""
+    }.`;
+    setMessage(summary);
+    toast.success(summary);
     setSelected(new Set());
     router.refresh();
   }

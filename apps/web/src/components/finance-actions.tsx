@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function InvoiceActions({
   invoiceId,
@@ -20,11 +21,17 @@ export function InvoiceActions({
   async function updateStatus(newStatus: string) {
     setLoading(true);
     setError("");
-    await fetch(`/api/v1/invoices/${invoiceId}`, {
+    const res = await fetch(`/api/v1/invoices/${invoiceId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
     });
+    if (res.ok) {
+      toast.success(`${invoiceNumber} marked ${newStatus}`);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to update invoice");
+    }
     router.refresh();
     setLoading(false);
   }
@@ -39,6 +46,7 @@ export function InvoiceActions({
       setError(data.error || "Failed to email invoice");
       return;
     }
+    toast.success(data.skipped ? "Email skipped (email service not configured)" : `${invoiceNumber} emailed`);
     router.refresh();
   }
 
@@ -53,6 +61,7 @@ export function InvoiceActions({
       return;
     }
     setConfirmingDelete(false);
+    toast.success(`${invoiceNumber} deleted`);
     router.refresh();
   }
 
@@ -141,6 +150,7 @@ export function GenerateInvoiceButton({ projectId }: { projectId: string }) {
       setLoading(false);
       return;
     }
+    toast.success("Invoice generated");
     router.push("/invoices");
     router.refresh();
   }
@@ -161,11 +171,18 @@ export function GeneratePaymentsButton({ projectId }: { projectId: string }) {
 
   async function generate() {
     setLoading(true);
-    await fetch("/api/v1/payments", {
+    const res = await fetch("/api/v1/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to generate payments");
+      setLoading(false);
+      return;
+    }
+    toast.success("Fielder payments generated");
     router.push("/payments");
     router.refresh();
   }

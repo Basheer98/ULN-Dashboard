@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function FielderDeleteButton({
   fielderId,
@@ -27,6 +28,7 @@ export function FielderDeleteButton({
       setLoading(false);
       return;
     }
+    toast.success(`${fielderName} deleted`);
     router.push("/fielders");
     router.refresh();
   }
@@ -45,6 +47,7 @@ export function FielderDeleteButton({
       setError(data.error || "Failed to restore fielder");
       return;
     }
+    toast.success(`${fielderName} restored`);
     router.refresh();
   }
 

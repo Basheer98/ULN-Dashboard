@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { StatusBadge } from "@/components/layout";
 import { formatCurrency, formatRate } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface FielderOption {
   id: string;
@@ -78,6 +79,7 @@ export function ProjectActions({
       return;
     }
 
+    toast.success("Fielder assigned");
     router.refresh();
     setLoading(false);
     setSelectedFielder("");
@@ -87,11 +89,17 @@ export function ProjectActions({
 
   async function updateStatus(status: string) {
     setLoading(true);
-    await fetch(`/api/v1/projects/${project.id}`, {
+    const res = await fetch(`/api/v1/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
+    if (res.ok) {
+      toast.success(`Status changed to ${status.replace(/_/g, " ")}`);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to update status");
+    }
     router.refresh();
     setLoading(false);
   }
@@ -100,7 +108,8 @@ export function ProjectActions({
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
 
     const res = await fetch(`/api/v1/projects/${project.id}/line-items`, {
       method: "POST",
@@ -120,7 +129,8 @@ export function ProjectActions({
       return;
     }
 
-    e.currentTarget.reset();
+    formEl.reset();
+    toast.success("Line item added");
     router.refresh();
     setLoading(false);
   }

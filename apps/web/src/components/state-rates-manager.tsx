@@ -8,6 +8,7 @@ import {
   US_STATES,
   formatRate,
 } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface StateRateRow {
   id: string;
@@ -53,6 +54,7 @@ export function StateRatesManager({ canEdit }: { canEdit: boolean }) {
       setError(data.error || "Failed to save");
       return;
     }
+    toast.success(`Rate saved for ${state}`);
     setState("");
     setNotes("");
     router.refresh();
@@ -62,7 +64,12 @@ export function StateRatesManager({ canEdit }: { canEdit: boolean }) {
 
   async function removeRate(stateCode: string) {
     if (!confirm(`Remove rate override for ${stateCode}?`)) return;
-    await fetch(`/api/v1/state-rates/${stateCode}`, { method: "DELETE" });
+    const res = await fetch(`/api/v1/state-rates/${stateCode}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(`Failed to remove rate for ${stateCode}`);
+      return;
+    }
+    toast.success(`Rate removed for ${stateCode}`);
     setRates((prev) => prev.filter((r) => r.state !== stateCode));
     router.refresh();
   }

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatRate } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface ClientData {
   id: string;
@@ -51,6 +52,7 @@ export function ClientEditForm({ client }: { client: ClientData }) {
       return;
     }
     setOpen(false);
+    toast.success("Client updated");
     router.refresh();
   }
 

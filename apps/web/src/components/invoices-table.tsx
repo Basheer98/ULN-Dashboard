@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/layout";
 import { InvoiceActions } from "@/components/finance-actions";
+import { toast } from "@/lib/toast";
 
 export type InvoiceRow = {
   id: string;
@@ -82,6 +83,7 @@ export function InvoicesTable({ invoices }: { invoices: InvoiceRow[] }) {
       setError(data.error || "Bulk update failed");
       return;
     }
+    toast.success(`${selected.size} invoice${selected.size === 1 ? "" : "s"} marked sent`);
     setSelected(new Set());
     router.refresh();
   }

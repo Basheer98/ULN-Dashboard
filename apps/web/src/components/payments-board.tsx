@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/layout";
 import { PaymentActions } from "@/components/payment-actions";
 import { formatCurrency, formatRate } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 export type PaymentRow = {
   id: string;
@@ -113,6 +114,7 @@ export function PaymentsBoard({
       setError(data.error || "Batch pay failed");
       return;
     }
+    toast.success(`${selected.length} payment${selected.length === 1 ? "" : "s"} marked paid`);
     setSelected([]);
     router.refresh();
   }

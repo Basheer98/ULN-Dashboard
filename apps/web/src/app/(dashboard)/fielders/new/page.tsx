@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout";
+import { toast } from "@/lib/toast";
+import { PasswordInput } from "@/components/password-input";
 
 export default function NewFielderPage() {
   const router = useRouter();
@@ -40,6 +42,7 @@ export default function NewFielderPage() {
       return;
     }
 
+    toast.success("Fielder created");
     router.push(`/fielders/${data.id}`);
     router.refresh();
   }
@@ -93,7 +96,7 @@ export default function NewFielderPage() {
               </div>
               <div>
                 <label className="label">Login Password</label>
-                <input name="loginPassword" type="password" minLength={6} className="w-full" />
+                <PasswordInput name="loginPassword" minLength={6} className="w-full" autoComplete="new-password" />
               </div>
             </div>
           </div>

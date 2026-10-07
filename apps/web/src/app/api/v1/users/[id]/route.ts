@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getRequestUser, revokeUserSessions } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
 import { serializeProject } from "@/lib/projects";
+import { logActivity } from "@/lib/activity-log";
 
 const updateSchema = z.object({
   role: z.enum(["admin", "dispatcher", "accountant", "coordinator"]).optional(),
@@ -25,6 +26,18 @@ export async function PATCH(
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return jsonError("Invalid input", 400);
 
+    const losesAdmin =
+      parsed.data.isActive === false || (parsed.data.role && parsed.data.role !== "admin");
+    if (losesAdmin) {
+      const target = await prisma.user.findUnique({ where: { id }, select: { role: true, isActive: true } });
+      if (target?.role === "admin" && target.isActive) {
+        const otherAdmins = await prisma.user.count({
+          where: { role: "admin", isActive: true, id: { not: id } },
+        });
+        if (otherAdmins === 0) return jsonError("There must be at least one active admin", 400);
+      }
+    }
+
     const data: Record<string, unknown> = { ...parsed.data };
     delete data.password;
     if (parsed.data.password) {
@@ -44,6 +57,79 @@ export async function PATCH(
     }
 
     return jsonOk(serializeProject(user));
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+/**
+ * Removes a team member. Accounts with any recorded history are deactivated instead of
+ * deleted so audit trails keep pointing at a real person; either way their logins end now.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const actor = requirePermission(await getRequestUser(request), "users:write");
+    const { id } = await params;
+
+    if (id === actor.id) return jsonError("You can't remove your own account", 400);
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        _count: {
+          select: {
+            projectsCreated: true,
+            attachments: true,
+            activityLogs: true,
+            financeTransactionsCreated: true,
+            financeTransactionsReviewed: true,
+            receiptsUploaded: true,
+            mileagePhotosUploaded: true,
+            financeAuditLogs: true,
+            mileageEntries: true,
+            fielderPaymentEvents: true,
+          },
+        },
+      },
+    });
+    if (!target) return jsonError("Team member not found", 404);
+    if (target.role === "fielder") {
+      return jsonError("Fielder logins are managed from the Fielders page", 400);
+    }
+
+    if (target.role === "admin" && target.isActive) {
+      const otherAdmins = await prisma.user.count({
+        where: { role: "admin", isActive: true, id: { not: id } },
+      });
+      if (otherAdmins === 0) return jsonError("You can't remove the last active admin", 400);
+    }
+
+    await revokeUserSessions(id);
+
+    const hasHistory = Object.values(target._count).some((count) => count > 0);
+    if (hasHistory) {
+      await prisma.user.update({ where: { id }, data: { isActive: false } });
+    } else {
+      await prisma.user.delete({ where: { id } });
+    }
+
+    await logActivity({
+      entityType: "user",
+      entityId: id,
+      action: "deleted",
+      user: actor,
+      summary: `${target.email} ${hasHistory ? "deactivated" : "deleted"} by ${actor.email}`,
+      metadata: { role: target.role, mode: hasHistory ? "deactivated" : "deleted" },
+    });
+
+    return jsonOk({ id, mode: hasHistory ? "deactivated" : "deleted" });
   } catch (error) {
     return handleApiError(error);
   }

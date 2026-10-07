@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout";
 import { formatCurrency } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface ClientOption {
   id: string;
@@ -199,6 +200,7 @@ export default function ImportProjectsPage() {
     setAllTabsResult(
       `All tabs · created ${data.created}, updated ${data.updated}, skipped ${data.skipped}, errors ${data.errored}\n${lines}`
     );
+    toast.success(`Import done: ${data.created} created, ${data.updated} updated`);
     router.refresh();
   }
 
@@ -220,8 +222,10 @@ export default function ImportProjectsPage() {
     }
     if (data.skipped) {
       setPushResult(`Skipped: ${data.reason}`);
+      toast.info(`Push skipped: ${data.reason}`);
       return;
     }
+    toast.success(`Updated ${data.updated} row${data.updated === 1 ? "" : "s"} on the sheet`);
     setPushResult(
       `Updated ${data.updated} row(s) on sheet${
         data.unmatched?.length ? ` · ${data.unmatched.length} project(s) not found in sheet` : ""
@@ -314,6 +318,7 @@ export default function ImportProjectsPage() {
       return;
     }
     setResult(data);
+    toast.success(`Import done: ${data.created} created, ${data.updated} updated`);
     router.refresh();
     void runPreview();
   }

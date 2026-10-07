@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { FINANCE_SETTING_KEYS, US_STATES } from "@uln/shared";
 import type { ExpenseDuplicateMatch } from "@uln/shared";
 import { ExpenseSmartHints, ReceiptScanField } from "./expense-smart";
+import { toast } from "@/lib/toast";
 
 interface SelectOption {
   id: string;
@@ -101,6 +102,7 @@ export function ExpenseForm({
       setLoading(false);
       return;
     }
+    toast.success("Expense created");
     router.push(`/finance/expenses/${data.id}`);
     router.refresh();
   }
@@ -311,7 +313,8 @@ export function IncomeForm({
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/income", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -333,9 +336,10 @@ export function IncomeForm({
       setLoading(false);
       return;
     }
+    toast.success("Income recorded");
     router.refresh();
     setLoading(false);
-    e.currentTarget.reset();
+    formEl.reset();
   }
 
   return (
@@ -427,7 +431,8 @@ export function PaymentMethodForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/payment-methods", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -448,9 +453,10 @@ export function PaymentMethodForm() {
       setLoading(false);
       return;
     }
+    toast.success("Payment method added");
     router.refresh();
     setLoading(false);
-    e.currentTarget.reset();
+    formEl.reset();
   }
 
   return (
@@ -515,7 +521,8 @@ export function VendorForm({ categories }: { categories: SelectOption[] }) {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/vendors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -535,9 +542,10 @@ export function VendorForm({ categories }: { categories: SelectOption[] }) {
       setLoading(false);
       return;
     }
+    toast.success("Vendor added");
     router.refresh();
     setLoading(false);
-    e.currentTarget.reset();
+    formEl.reset();
   }
 
   return (
@@ -601,7 +609,8 @@ export function CategoryForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/categories", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -613,9 +622,10 @@ export function CategoryForm() {
       setLoading(false);
       return;
     }
+    toast.success("Category added");
     router.refresh();
     setLoading(false);
-    e.currentTarget.reset();
+    formEl.reset();
   }
 
   return (
@@ -663,6 +673,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: Record<stri
       return;
     }
     setSettings(data);
+    toast.success("Settings saved");
     router.refresh();
     setLoading(false);
   }
@@ -774,6 +785,7 @@ export function ReconciliationForm({
       setLoading(false);
       return;
     }
+    toast.success("Reconciliation started");
     router.push(`/finance/reconciliation/${data.id}`);
     router.refresh();
   }
@@ -862,7 +874,8 @@ export function LoanForm() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/loans", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -883,9 +896,10 @@ export function LoanForm() {
       setLoading(false);
       return;
     }
+    toast.success("Loan added");
     router.refresh();
     setLoading(false);
-    e.currentTarget.reset();
+    formEl.reset();
   }
 
   return (

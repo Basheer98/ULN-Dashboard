@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 interface PreviewMatch {
   date: string;
@@ -99,6 +100,7 @@ export function BankStatementImport({
     setMessage(
       `Ending balance set to ${formatCurrency(preview.suggestedEndingBalance)} from statement`
     );
+    toast.success("Ending balance updated");
     router.refresh();
   }
 
@@ -129,6 +131,7 @@ export function BankStatementImport({
     setMessage(
       `Imported ${data.added} line(s): ${data.cleared} cleared, ${data.unmatchedManual} unmatched pending review`
     );
+    toast.success(`Imported ${data.added} statement line${data.added === 1 ? "" : "s"}`);
     setPreview(null);
     router.refresh();
   }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 
 export function ClientDeleteButton({
   clientId,
@@ -27,6 +28,7 @@ export function ClientDeleteButton({
       setLoading(false);
       return;
     }
+    toast.success(`${clientName} deleted`);
     router.push("/clients");
     router.refresh();
   }
@@ -45,6 +47,7 @@ export function ClientDeleteButton({
       setError(data.error || "Failed to restore client");
       return;
     }
+    toast.success(`${clientName} restored`);
     router.refresh();
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 
 interface Attachment {
   id: string;
@@ -44,7 +45,13 @@ export function ProjectAttachments({
     });
     setUploading(false);
     e.target.value = "";
-    if (res.ok) load();
+    if (res.ok) {
+      toast.success("Photo uploaded");
+      load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Upload failed");
+    }
   }
 
   if (loading) {

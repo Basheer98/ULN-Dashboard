@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatCurrency } from "@uln/shared";
+import { toast } from "@/lib/toast";
 
 type PayEvent = {
   id: string;
@@ -62,6 +63,7 @@ export function PaymentActions({
       setLoading(false);
       return;
     }
+    toast.success(`Payment marked ${newStatus}`);
     router.refresh();
     setLoading(false);
   }
@@ -92,6 +94,7 @@ export function PaymentActions({
       setLoading(false);
       return;
     }
+    toast.success("Payment recorded");
     setPaying(false);
     setEvents(null);
     setShowHistory(false);

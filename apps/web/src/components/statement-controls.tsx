@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "@/lib/toast";
 
 function toIsoDate(d: Date) {
   const y = d.getFullYear();
@@ -86,6 +87,8 @@ export function StatementControls({
       return;
     }
     setMessage(data.skipped ? "Email skipped (no Resend key — check server logs)" : "Statement emailed");
+    if (data.skipped) toast.info("Email skipped (email service not configured)");
+    else toast.success("Statement emailed");
   }
 
   return (

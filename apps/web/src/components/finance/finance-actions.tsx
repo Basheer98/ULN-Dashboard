@@ -2,6 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/lib/toast";
+
+const REVIEW_ACTION_MESSAGES: Record<string, string> = {
+  approve: "Approved",
+  reject: "Rejected",
+  reimburse: "Marked reimbursed",
+};
 
 export function ExpenseActions({
   expenseId,
@@ -24,8 +31,12 @@ export function ExpenseActions({
     });
     setLoading(false);
     if (res.ok) {
+      toast.success(REVIEW_ACTION_MESSAGES[path] ?? "Saved");
       setShowReject(false);
       router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Action failed");
     }
   }
 
@@ -109,8 +120,12 @@ export function MileageActions({
     });
     setLoading(false);
     if (res.ok) {
+      toast.success(REVIEW_ACTION_MESSAGES[path] ?? "Saved");
       setShowReject(false);
       router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Action failed");
     }
   }
 
@@ -187,9 +202,15 @@ export function ReconciliationActions({
 
   async function complete() {
     setLoading(true);
-    await fetch(`/api/v1/finance/reconciliation/${reconciliationId}/complete`, {
+    const res = await fetch(`/api/v1/finance/reconciliation/${reconciliationId}/complete`, {
       method: "POST",
     });
+    if (res.ok) {
+      toast.success("Reconciliation completed");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error || "Failed to complete reconciliation");
+    }
     router.refresh();
     setLoading(false);
   }
@@ -282,7 +303,8 @@ export function RecordInvoicePaymentForm({
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = new FormData(e.currentTarget);
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
     const res = await fetch("/api/v1/finance/invoice-payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -301,7 +323,8 @@ export function RecordInvoicePaymentForm({
       setLoading(false);
       return;
     }
-    e.currentTarget.reset();
+    formEl.reset();
+    toast.success("Invoice payment recorded");
     router.refresh();
     setLoading(false);
   }
@@ -414,6 +437,7 @@ export function LoanPaymentForm({
       setLoading(false);
       return;
     }
+    toast.success("Loan payment recorded");
     router.refresh();
     setLoading(false);
   }
