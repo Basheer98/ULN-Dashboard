@@ -7,7 +7,9 @@ const publicPaths = ["/login", "/api/v1/auth/login"];
 const COOKIE_NAME = "uln_session";
 
 function toLogin(request: NextRequest, clearCookie: boolean) {
-  const response = NextResponse.redirect(new URL("/login", request.url));
+  const loginUrl = new URL("/login", request.url);
+  if (clearCookie) loginUrl.searchParams.set("reason", "expired");
+  const response = NextResponse.redirect(loginUrl);
   if (clearCookie) response.cookies.delete(COOKIE_NAME);
   return response;
 }

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { passwordSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser, revokeUserSessions } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api";
@@ -12,7 +13,7 @@ const updateSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   isActive: z.boolean().optional(),
-  password: z.string().min(6).optional(),
+  password: passwordSchema.optional(),
 });
 
 export async function PATCH(
@@ -24,13 +25,21 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return jsonError("Invalid input", 400);
+    if (!parsed.success) return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { email: true, role: true, isActive: true, firstName: true, lastName: true },
+    });
+    if (!target) return jsonError("Team member not found", 404);
+    if (target.role === "fielder") {
+      return jsonError("Fielder logins are managed from the Fielders page", 400);
+    }
 
     const losesAdmin =
       parsed.data.isActive === false || (parsed.data.role && parsed.data.role !== "admin");
     if (losesAdmin) {
-      const target = await prisma.user.findUnique({ where: { id }, select: { role: true, isActive: true } });
-      if (target?.role === "admin" && target.isActive) {
+      if (target.role === "admin" && target.isActive) {
         const otherAdmins = await prisma.user.count({
           where: { role: "admin", isActive: true, id: { not: id } },
         });
@@ -54,6 +63,30 @@ export async function PATCH(
 
     if (parsed.data.password || parsed.data.isActive === false) {
       await revokeUserSessions(id, actor.id === id ? actor.sessionId : undefined);
+    }
+
+    const notes: string[] = [];
+    if (parsed.data.role && parsed.data.role !== target.role) {
+      notes.push(`role ${target.role} → ${parsed.data.role}`);
+    }
+    if (
+      (parsed.data.firstName !== undefined && parsed.data.firstName !== (target.firstName ?? "")) ||
+      (parsed.data.lastName !== undefined && parsed.data.lastName !== (target.lastName ?? ""))
+    ) {
+      notes.push("name");
+    }
+    if (parsed.data.password) notes.push("password reset");
+    if (parsed.data.isActive === true && !target.isActive) notes.push("restored");
+    if (parsed.data.isActive === false && target.isActive) notes.push("deactivated");
+    if (notes.length > 0) {
+      await logActivity({
+        entityType: "user",
+        entityId: id,
+        action: parsed.data.isActive === true && !target.isActive ? "restored" : "updated",
+        user: actor,
+        summary: `Updated ${target.email}: ${notes.join(", ")}`,
+        metadata: { notes },
+      });
     }
 
     return jsonOk(serializeProject(user));

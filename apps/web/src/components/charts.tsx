@@ -256,7 +256,7 @@ export function JobTypeChart({ data }: { data: { name: string; sqft: number }[] 
 export function SqftByStateChart({
   data,
 }: {
-  data: { code: string; name: string; sqft: number; revenue: number }[];
+  data: { code: string; name: string; sqft: number; revenue?: number }[];
 }) {
   if (!data.length) return <EmptyState label="No state data yet" />;
   return (

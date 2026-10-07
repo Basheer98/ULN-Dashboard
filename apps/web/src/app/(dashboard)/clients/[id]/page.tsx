@@ -3,7 +3,7 @@ import { ClientDeleteButton } from "@/components/client-delete-button";
 import { ClientEditForm } from "@/components/client-edit-form";
 import { prisma } from "@/lib/prisma";
 import { getClientAnalytics } from "@/lib/analytics";
-import { formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
+import { canViewProjectFinancials, formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
 import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,16 +16,24 @@ export default async function ClientDetailPage({
   const { id } = await params;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "clients:write") : false;
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
       projects: { orderBy: { createdAt: "desc" }, include: { assignments: true } },
-      invoices: { where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
 
   if (!client) notFound();
+
+  const invoices = canSeeMoney
+    ? await prisma.invoice.findMany({
+        where: { clientId: id, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      })
+    : [];
 
   const analytics = await getClientAnalytics(id);
 
@@ -46,7 +54,7 @@ export default async function ClientDetailPage({
               contactName: client.contactName,
               email: client.email,
               phone: client.phone,
-              defaultSqftRate: toNumber(client.defaultSqftRate),
+              defaultSqftRate: canSeeMoney ? toNumber(client.defaultSqftRate) : undefined,
               billingTerms: client.billingTerms,
               notes: client.notes,
               isActive: client.isActive,
@@ -60,38 +68,43 @@ export default async function ClientDetailPage({
             />
           )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className={`grid gap-4 ${canSeeMoney ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Total SQFT</p>
             <p className="mt-2 text-2xl font-semibold">{analytics.totalSqft.toLocaleString()}</p>
           </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Est. Revenue</p>
-            <p className="mt-2 text-2xl font-semibold">{formatCurrency(analytics.totalRevenue)}</p>
-          </div>
+          {canSeeMoney && (
+            <div className="stat-card">
+              <p className="text-sm text-muted-foreground">Est. Revenue</p>
+              <p className="mt-2 text-2xl font-semibold">{formatCurrency(analytics.totalRevenue)}</p>
+            </div>
+          )}
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Projects</p>
             <p className="mt-2 text-2xl font-semibold">{analytics.projectCount}</p>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className={`grid gap-6 ${canSeeMoney ? "lg:grid-cols-2" : ""}`}>
           <div className="card space-y-3">
             <h2 className="font-semibold text-foreground">Contact</h2>
             <p className="text-sm"><span className="text-muted-foreground">Contact:</span> {client.contactName || "—"}</p>
             <p className="text-sm"><span className="text-muted-foreground">Email:</span> {client.email || "—"}</p>
             <p className="text-sm"><span className="text-muted-foreground">Phone:</span> {client.phone || "—"}</p>
-            <p className="text-sm"><span className="text-muted-foreground">Rate:</span> {formatRate(toNumber(client.defaultSqftRate))} / SQFT</p>
+            {canSeeMoney && (
+              <p className="text-sm"><span className="text-muted-foreground">Rate:</span> {formatRate(toNumber(client.defaultSqftRate))} / SQFT</p>
+            )}
             <p className="text-sm"><span className="text-muted-foreground">Terms:</span> {client.billingTerms || "—"}</p>
             {client.notes && <p className="text-sm text-muted-foreground">{client.notes}</p>}
           </div>
+          {canSeeMoney && (
           <div className="card">
             <h2 className="mb-4 font-semibold text-foreground">Recent Invoices</h2>
-            {client.invoices.length === 0 ? (
+            {invoices.length === 0 ? (
               <p className="text-sm text-muted-foreground">No invoices yet.</p>
             ) : (
               <ul className="space-y-2 text-sm">
-                {client.invoices.map((inv) => (
+                {invoices.map((inv) => (
                   <li key={inv.id} className="flex justify-between">
                     <span>{inv.invoiceNumber}</span>
                     <span>{formatCurrency(toNumber(inv.totalAmount))}</span>
@@ -101,6 +114,7 @@ export default async function ClientDetailPage({
               </ul>
             )}
           </div>
+          )}
         </div>
 
         <div className="card">

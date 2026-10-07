@@ -11,6 +11,7 @@ import { router } from "expo-router";
 import { apiRequest } from "../../src/lib/api";
 import { getToken } from "../../src/lib/auth";
 import { FormField } from "../../src/components/form-field";
+import { useCanSeeMoney } from "../../src/lib/permissions";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 
@@ -23,6 +24,7 @@ export default function NewClientScreen() {
   const [billingTerms, setBillingTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const canSeeMoney = useCanSeeMoney();
 
   async function handleSubmit() {
     if (!name.trim()) {
@@ -41,7 +43,7 @@ export default function NewClientScreen() {
           contactName: contactName || undefined,
           email: email || undefined,
           phone: phone || undefined,
-          defaultSqftRate: parseFloat(defaultSqftRate) || 0,
+          ...(canSeeMoney ? { defaultSqftRate: parseFloat(defaultSqftRate) || 0 } : {}),
           billingTerms: billingTerms || undefined,
           notes: notes || undefined,
         }),
@@ -60,7 +62,9 @@ export default function NewClientScreen() {
       <FormField label="Contact name" value={contactName} onChangeText={setContactName} />
       <FormField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
       <FormField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      {canSeeMoney ? (
+        <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <FormField label="Billing terms" value={billingTerms} onChangeText={setBillingTerms} />
       <FormField label="Notes" value={notes} onChangeText={setNotes} multiline />
       <TouchableOpacity style={styles.submit} onPress={handleSubmit} disabled={submitting}>

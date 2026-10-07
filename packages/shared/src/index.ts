@@ -1,8 +1,41 @@
 import { z } from "zod";
 
+/** Account emails are stored and matched lowercase, so "Jane@X.com " and "jane@x.com" are one login. */
+const accountEmail = z.string().trim().toLowerCase().pipe(z.string().email());
+
+/** Web sessions end after this long with no activity. Mobile sessions are exempt. */
+export const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+/** Requests carrying this header (background polling) don't count as activity. */
+export const BACKGROUND_REQUEST_HEADER = "x-uln-background";
+
+export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_RULES_TEXT = `At least ${PASSWORD_MIN_LENGTH} characters, with a letter and a number`;
+
+const COMMON_PASSWORDS = new Set([
+  "password1", "password12", "password123", "password1234", "passw0rd123",
+  "1234567890", "12345678910", "qwerty1234", "qwerty12345", "qwertyuiop1",
+  "abc1234567", "abcd123456", "iloveyou12", "welcome123", "welcome1234",
+  "letmein123", "admin12345", "admin123456", "changeme123", "football123",
+  "baseball123", "sunshine123", "monkey12345", "dragon12345", "1q2w3e4r5t",
+  "asdfghjkl1", "zaq12wsxcde", "trustno1234", "superman123", "123qweasdzxc",
+]);
+
+/**
+ * Policy for any newly set password. bcrypt ignores bytes past 72, so longer
+ * passwords are rejected rather than silently truncated.
+ */
+export const passwordSchema = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+  .max(72, "Password must be 72 characters or fewer")
+  .refine((value) => /[a-z]/i.test(value), "Password must include a letter")
+  .refine((value) => /\d/.test(value), "Password must include a number")
+  .refine((value) => !/^(.)\1+$/.test(value), "Password is too simple")
+  .refine((value) => !COMMON_PASSWORDS.has(value.toLowerCase()), "Password is too common — choose another");
+
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
+  email: accountEmail,
+  password: z.string().min(1).max(200),
 });
 
 export const clientSchema = z.object({
@@ -78,8 +111,8 @@ export const projectCreateSchema = projectSchema.extend({
 });
 
 export const userSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6).optional(),
+  email: accountEmail,
+  password: passwordSchema.optional(),
   role: z.enum(["admin", "dispatcher", "accountant", "coordinator"]),
   firstName: z.string().optional(),
   lastName: z.string().optional(),

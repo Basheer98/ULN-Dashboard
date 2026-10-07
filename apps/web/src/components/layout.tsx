@@ -174,7 +174,7 @@ export function FinanceSubnav() {
 
   return (
     <nav className="scrollbar-none border-b border-border bg-surface/50 px-4 py-2 sm:px-6 lg:px-8 print:hidden">
-      <div className="flex gap-1 overflow-x-auto pb-0.5">
+      <div className="flex gap-1 overflow-x-auto pb-0.5 lg:flex-wrap lg:overflow-visible">
         {FINANCE_NAV.map((item) => {
           const moreSpecificActive = FINANCE_NAV.some(
             (other) =>

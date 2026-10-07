@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BACKGROUND_REQUEST_HEADER } from "@uln/shared";
 
 interface NotificationItem {
   id: string;
@@ -51,7 +52,9 @@ export function NotificationBell() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/v1/notifications?limit=25");
+      const res = await fetch("/api/v1/notifications?limit=25", {
+        headers: { [BACKGROUND_REQUEST_HEADER]: "1" },
+      });
       if (!res.ok) return;
       const data = await res.json();
       setItems(data.notifications ?? []);

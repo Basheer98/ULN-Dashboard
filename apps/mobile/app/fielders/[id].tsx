@@ -27,6 +27,7 @@ export default function FielderDetailScreen() {
   const [email, setEmail] = useState("");
   const [employmentType, setEmploymentType] = useState<"contractor_1099" | "w2">("contractor_1099");
   const [defaultSqftRate, setDefaultSqftRate] = useState("");
+  const [hasRate, setHasRate] = useState(false);
   const [region, setRegion] = useState("");
   const [isActive, setIsActive] = useState(true);
 
@@ -37,14 +38,15 @@ export default function FielderDetailScreen() {
       try {
         const f = await apiRequest<{
           firstName: string; lastName: string; phone: string | null; email: string | null;
-          employmentType: string; defaultSqftRate: number; region: string | null; isActive: boolean;
+          employmentType: string; defaultSqftRate?: number; region: string | null; isActive: boolean;
         }>(`/fielders/${id}`, { token });
         setFirstName(f.firstName);
         setLastName(f.lastName);
         setPhone(f.phone ?? "");
         setEmail(f.email ?? "");
         setEmploymentType(f.employmentType as "contractor_1099" | "w2");
-        setDefaultSqftRate(String(f.defaultSqftRate));
+        setDefaultSqftRate(f.defaultSqftRate != null ? String(f.defaultSqftRate) : "");
+        setHasRate(f.defaultSqftRate != null);
         setRegion(f.region ?? "");
         setIsActive(f.isActive);
       } finally {
@@ -71,7 +73,7 @@ export default function FielderDetailScreen() {
           phone: phone || undefined,
           email: email || undefined,
           employmentType,
-          defaultSqftRate: parseFloat(defaultSqftRate) || 0,
+          ...(hasRate ? { defaultSqftRate: parseFloat(defaultSqftRate) || 0 } : {}),
           region: region || undefined,
           isActive,
         }),
@@ -106,7 +108,9 @@ export default function FielderDetailScreen() {
         onChange={setEmploymentType}
         formatLabel={(v) => (v === "w2" ? "W-2" : "1099 Contractor")}
       />
-      <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      {hasRate ? (
+        <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <FormField label="Region" value={region} onChangeText={setRegion} />
       <View style={styles.switchRow}>
         <Text style={styles.switchLabel}>Active</Text>

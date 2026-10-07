@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "@/lib/toast";
+import { PASSWORD_MIN_LENGTH, PASSWORD_RULES_TEXT } from "@uln/shared";
 import { PasswordInput } from "@/components/password-input";
 
 export function TeamUserForm() {
@@ -36,8 +37,9 @@ export function TeamUserForm() {
       return;
     }
 
+    const created = await res.json().catch(() => ({}));
     formEl.reset();
-    toast.success("Team member added");
+    toast.success(created.email ? `Team member added — they sign in with ${created.email}` : "Team member added");
     router.refresh();
     setLoading(false);
   }
@@ -49,8 +51,20 @@ export function TeamUserForm() {
         <input name="firstName" placeholder="First name" className="w-full" />
         <input name="lastName" placeholder="Last name" className="w-full" />
       </div>
-      <input name="email" type="email" required placeholder="Email" className="w-full" />
-      <PasswordInput name="password" required minLength={6} placeholder="Password" className="w-full" autoComplete="new-password" />
+      <input
+        name="email"
+        type="email"
+        required
+        placeholder="Email"
+        className="w-full"
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+      />
+      <div>
+        <PasswordInput name="password" required minLength={PASSWORD_MIN_LENGTH} maxLength={72} placeholder="Password" className="w-full" autoComplete="new-password" />
+        <p className="mt-1 text-xs text-muted-foreground">{PASSWORD_RULES_TEXT}</p>
+      </div>
       <select name="role" required className="w-full">
         <option value="dispatcher">Dispatcher</option>
         <option value="coordinator">Project Coordinator (project entry only, no finance)</option>

@@ -1,14 +1,20 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getRequestUser } from "@/lib/auth";
 import { jsonOk, jsonError } from "@/lib/api";
 import { ensureProductionSchema } from "@/lib/ensure-schema";
 
+async function isAdminRequest(request: NextRequest) {
+  const user = await getRequestUser(request);
+  return user?.role === "admin";
+}
+
 /**
  * Schema probe for production debugging.
- * GET  /api/health/db
- * POST /api/health/db  — runs idempotent schema repair (no auth; only DDL IF NOT EXISTS)
+ * GET  /api/health/db  — overall status for anyone; per-check errors for admins only
+ * POST /api/health/db  — admin only; runs idempotent schema repair (DDL IF NOT EXISTS)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const checks: Record<string, { ok: boolean; error?: string }> = {};
 
   async function probe(name: string, fn: () => Promise<unknown>) {
@@ -46,20 +52,29 @@ export async function GET() {
   await probe("notifications", () => prisma.notification.count());
 
   const ok = Object.values(checks).every((c) => c.ok);
+  const status = ok ? "ok" : "schema_mismatch";
+  const timestamp = new Date().toISOString();
+
+  if (!(await isAdminRequest(request))) {
+    return jsonOk({ status, timestamp }, ok ? 200 : 503);
+  }
+
   return jsonOk(
     {
-      status: ok ? "ok" : "schema_mismatch",
+      status,
       hint: ok
         ? undefined
         : "POST /api/health/db to auto-repair, or run: npm run db:migrate:deploy",
       checks,
-      timestamp: new Date().toISOString(),
+      timestamp,
     },
     ok ? 200 : 503
   );
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!(await isAdminRequest(request))) return jsonError("Forbidden", 403);
+
   const result = await ensureProductionSchema();
   if (!result.ok) {
     return jsonError(`Schema repair failed: ${result.steps.join(" | ")}`, 500);

@@ -12,6 +12,7 @@ import { apiRequest } from "../../src/lib/api";
 import { getToken } from "../../src/lib/auth";
 import { FormField } from "../../src/components/form-field";
 import { ChipPicker } from "../../src/components/chip-picker";
+import { useCanSeeMoney } from "../../src/lib/permissions";
 import { colors } from "../../src/lib/theme";
 import { fonts } from "../../src/lib/fonts";
 
@@ -26,6 +27,7 @@ export default function NewFielderScreen() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const canSeeMoney = useCanSeeMoney();
 
   async function handleSubmit() {
     if (!firstName.trim() || !lastName.trim()) {
@@ -45,7 +47,7 @@ export default function NewFielderScreen() {
           phone: phone || undefined,
           email: email || undefined,
           employmentType,
-          defaultSqftRate: parseFloat(defaultSqftRate) || 0,
+          ...(canSeeMoney ? { defaultSqftRate: parseFloat(defaultSqftRate) || 0 } : {}),
           region: region || undefined,
           loginEmail: loginEmail || undefined,
           loginPassword: loginPassword || undefined,
@@ -72,10 +74,17 @@ export default function NewFielderScreen() {
         onChange={setEmploymentType}
         formatLabel={(v) => (v === "w2" ? "W-2" : "1099 Contractor")}
       />
-      <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      {canSeeMoney ? (
+        <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <FormField label="Region" value={region} onChangeText={setRegion} />
       <FormField label="Login email (optional)" value={loginEmail} onChangeText={setLoginEmail} keyboardType="email-address" />
-      <FormField label="Login password (optional)" value={loginPassword} onChangeText={setLoginPassword} />
+      <FormField
+        label="Login password (optional, 10+ chars with a letter & number)"
+        value={loginPassword}
+        onChangeText={setLoginPassword}
+        secureTextEntry
+      />
       <TouchableOpacity style={styles.submit} onPress={handleSubmit} disabled={submitting}>
         {submitting ? <ActivityIndicator color={colors.accentForeground} /> : <Text style={styles.submitText}>Create fielder</Text>}
       </TouchableOpacity>

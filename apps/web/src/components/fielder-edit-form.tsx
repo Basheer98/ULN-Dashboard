@@ -12,7 +12,8 @@ interface FielderData {
   phone: string | null;
   email: string | null;
   employmentType: string;
-  defaultSqftRate: number;
+  /** Omitted for roles that may not see money; the rate field is hidden and left unchanged. */
+  defaultSqftRate?: number;
   region: string | null;
   isActive: boolean;
 }
@@ -28,7 +29,7 @@ export function FielderEditForm({ fielder }: { fielder: FielderData }) {
     phone: fielder.phone ?? "",
     email: fielder.email ?? "",
     employmentType: fielder.employmentType,
-    defaultSqftRate: String(fielder.defaultSqftRate),
+    defaultSqftRate: fielder.defaultSqftRate != null ? String(fielder.defaultSqftRate) : "",
     region: fielder.region ?? "",
     isActive: fielder.isActive,
   });
@@ -40,10 +41,11 @@ export function FielderEditForm({ fielder }: { fielder: FielderData }) {
     const res = await fetch(`/api/v1/fielders/${fielder.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        defaultSqftRate: Number(form.defaultSqftRate),
-      }),
+      body: JSON.stringify(
+        fielder.defaultSqftRate != null
+          ? { ...form, defaultSqftRate: Number(form.defaultSqftRate) }
+          : { ...form, defaultSqftRate: undefined }
+      ),
     });
     const data = await res.json();
     setLoading(false);
@@ -114,6 +116,7 @@ export function FielderEditForm({ fielder }: { fielder: FielderData }) {
             <option value="w2">W-2 Employee</option>
           </select>
         </div>
+        {fielder.defaultSqftRate != null && (
         <div>
           <label className="label">Default Rate ($/SQFT)</label>
           <input
@@ -128,6 +131,7 @@ export function FielderEditForm({ fielder }: { fielder: FielderData }) {
             Current: {formatRate(fielder.defaultSqftRate)}/SQFT
           </p>
         </div>
+        )}
         <div>
           <label className="label">Region</label>
           <input

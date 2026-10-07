@@ -62,7 +62,8 @@ export default function FieldersScreen() {
           <TouchableOpacity style={styles.card} onPress={() => router.push(`/fielders/${item.id}`)}>
             <Text style={styles.name}>{item.firstName} {item.lastName}</Text>
             <Text style={styles.meta}>
-              {item.employmentType === "w2" ? "W-2" : "1099"} · ${item.defaultSqftRate}/SQFT
+              {item.employmentType === "w2" ? "W-2" : "1099"}
+              {item.defaultSqftRate != null ? ` · $${item.defaultSqftRate}/SQFT` : ""}
               {item.region ? ` · ${item.region}` : ""}
             </Text>
             <Text style={[styles.meta, !item.isActive && styles.inactive]}>

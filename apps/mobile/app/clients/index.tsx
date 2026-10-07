@@ -61,7 +61,10 @@ export default function ClientsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} onPress={() => router.push(`/clients/${item.id}`)}>
             <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.meta}>{item.contactName || "No contact"} · ${item.defaultSqftRate}/SQFT</Text>
+            <Text style={styles.meta}>
+              {item.contactName || "No contact"}
+              {item.defaultSqftRate != null ? ` · $${item.defaultSqftRate}/SQFT` : ""}
+            </Text>
             <Text style={[styles.meta, !item.isActive && styles.inactive]}>
               {item.isActive ? "Active" : "Inactive"}
             </Text>

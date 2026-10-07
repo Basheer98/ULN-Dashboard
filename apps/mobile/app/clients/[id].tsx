@@ -25,6 +25,7 @@ export default function ClientDetailScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [defaultSqftRate, setDefaultSqftRate] = useState("");
+  const [hasRate, setHasRate] = useState(false);
   const [billingTerms, setBillingTerms] = useState("");
   const [notes, setNotes] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -36,14 +37,15 @@ export default function ClientDetailScreen() {
       try {
         const client = await apiRequest<{
           name: string; contactName: string | null; email: string | null;
-          phone: string | null; defaultSqftRate: number; billingTerms: string | null;
+          phone: string | null; defaultSqftRate?: number; billingTerms: string | null;
           notes: string | null; isActive: boolean;
         }>(`/clients/${id}`, { token });
         setName(client.name);
         setContactName(client.contactName ?? "");
         setEmail(client.email ?? "");
         setPhone(client.phone ?? "");
-        setDefaultSqftRate(String(client.defaultSqftRate));
+        setDefaultSqftRate(client.defaultSqftRate != null ? String(client.defaultSqftRate) : "");
+        setHasRate(client.defaultSqftRate != null);
         setBillingTerms(client.billingTerms ?? "");
         setNotes(client.notes ?? "");
         setIsActive(client.isActive);
@@ -70,7 +72,7 @@ export default function ClientDetailScreen() {
           contactName: contactName || undefined,
           email: email || undefined,
           phone: phone || undefined,
-          defaultSqftRate: parseFloat(defaultSqftRate) || 0,
+          ...(hasRate ? { defaultSqftRate: parseFloat(defaultSqftRate) || 0 } : {}),
           billingTerms: billingTerms || undefined,
           notes: notes || undefined,
           isActive,
@@ -99,7 +101,9 @@ export default function ClientDetailScreen() {
       <FormField label="Contact name" value={contactName} onChangeText={setContactName} />
       <FormField label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
       <FormField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      {hasRate ? (
+        <FormField label="Default rate ($/SQFT)" value={defaultSqftRate} onChangeText={setDefaultSqftRate} keyboardType="decimal-pad" />
+      ) : null}
       <FormField label="Billing terms" value={billingTerms} onChangeText={setBillingTerms} />
       <FormField label="Notes" value={notes} onChangeText={setNotes} multiline />
       <View style={styles.switchRow}>

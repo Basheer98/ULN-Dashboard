@@ -31,7 +31,9 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return jsonError(parsed.error.errors[0]?.message ?? "Invalid input", 400);
     if (!parsed.data.password) return jsonError("Password required for new users", 400);
 
-    const existing = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    const existing = await prisma.user.findFirst({
+      where: { email: { equals: parsed.data.email, mode: "insensitive" } },
+    });
     if (existing) return jsonError("Email already in use", 400);
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 12);

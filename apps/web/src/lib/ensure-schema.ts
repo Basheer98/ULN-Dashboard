@@ -161,6 +161,10 @@ export async function ensureProductionSchema(): Promise<{ ok: boolean; steps: st
       `CREATE INDEX IF NOT EXISTS "sessions_user_id_idx" ON "sessions"("user_id")`
     );
     await run(
+      "sessions.last_seen_at",
+      `ALTER TABLE "sessions" ADD COLUMN IF NOT EXISTS "last_seen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`
+    );
+    await run(
       "login_attempts",
       `CREATE TABLE IF NOT EXISTS "login_attempts" (
         "id" TEXT NOT NULL,

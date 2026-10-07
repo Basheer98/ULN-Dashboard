@@ -37,10 +37,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { fielder: { select: { isActive: true } } },
-    });
+    const user =
+      (await prisma.user.findUnique({
+        where: { email },
+        include: { fielder: { select: { isActive: true } } },
+      })) ??
+      (await prisma.user.findFirst({
+        where: { email: { equals: email, mode: "insensitive" } },
+        include: { fielder: { select: { isActive: true } } },
+      }));
 
     if (!user) {
       await burnPasswordCheck(parsed.data.password);

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { cache } from "react";
 import type { UserRole } from "@uln/database";
+import { BACKGROUND_REQUEST_HEADER, SESSION_IDLE_TIMEOUT_MS } from "@uln/shared";
 import { prisma } from "./prisma";
 
 const COOKIE_NAME = "uln_session";
@@ -62,11 +63,19 @@ export async function createSession(
     .sign(getJwtSecret());
 }
 
+/** Skip writing lastSeenAt on every request; once a minute is precise enough. */
+const LAST_SEEN_WRITE_INTERVAL_MS = 60 * 1000;
+/**
+ * lastSeenAt can trail real activity by the write interval plus the client's one-minute
+ * keepalive, so the server waits that long past the timeout before ending the session.
+ */
+const SERVER_IDLE_LIMIT_MS = SESSION_IDLE_TIMEOUT_MS + 2 * 60 * 1000;
+
 /**
  * Role, active status and revocation come from the database on every request,
  * so deactivating a user or changing their role takes effect immediately.
  */
-const loadSessionUser = cache(async (sessionId: string): Promise<SessionUser | null> => {
+const loadSessionUser = cache(async (sessionId: string, countsAsActivity: boolean): Promise<SessionUser | null> => {
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
@@ -82,11 +91,21 @@ const loadSessionUser = cache(async (sessionId: string): Promise<SessionUser | n
       },
     },
   });
-  if (!session || session.revokedAt || session.expiresAt <= new Date()) return null;
+  const now = Date.now();
+  if (!session || session.revokedAt || session.expiresAt.getTime() <= now) return null;
 
   const { user } = session;
   if (!user.isActive) return null;
   if (user.role === "fielder" && user.fielder && !user.fielder.isActive) return null;
+
+  const idleMs = now - session.lastSeenAt.getTime();
+  if (session.client === "web" && idleMs > SERVER_IDLE_LIMIT_MS) {
+    await revokeSession(session.id);
+    return null;
+  }
+  if (countsAsActivity && idleMs > LAST_SEEN_WRITE_INTERVAL_MS) {
+    await prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: new Date(now) } });
+  }
 
   return {
     id: user.id,
@@ -97,11 +116,11 @@ const loadSessionUser = cache(async (sessionId: string): Promise<SessionUser | n
   };
 });
 
-export async function verifyToken(token: string): Promise<SessionUser | null> {
+export async function verifyToken(token: string, countsAsActivity = true): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
     if (typeof payload.sid !== "string") return null;
-    return await loadSessionUser(payload.sid);
+    return await loadSessionUser(payload.sid, countsAsActivity);
   } catch {
     return null;
   }
@@ -149,14 +168,15 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 }
 
 export async function getRequestUser(request: NextRequest): Promise<SessionUser | null> {
+  const countsAsActivity = request.headers.get(BACKGROUND_REQUEST_HEADER) !== "1";
   const authHeader = request.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    return verifyToken(authHeader.slice(7));
+    return verifyToken(authHeader.slice(7), countsAsActivity);
   }
 
   const cookieToken = request.cookies.get(COOKIE_NAME)?.value;
   if (cookieToken) {
-    return verifyToken(cookieToken);
+    return verifyToken(cookieToken, countsAsActivity);
   }
 
   return null;

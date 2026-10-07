@@ -106,6 +106,8 @@ model Session {
   userAgent  String?   @map("user_agent")
   expiresAt  DateTime  @map("expires_at")
   revokedAt  DateTime? @map("revoked_at")
+  /// Web sessions end after a period without activity; see SESSION_IDLE_TIMEOUT_MS.
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
   @@index([userId])

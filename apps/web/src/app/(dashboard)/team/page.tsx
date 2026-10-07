@@ -1,4 +1,5 @@
-import { Header, StatusBadge } from "@/components/layout";
+import Link from "next/link";
+import { Header } from "@/components/layout";
 import { TeamUserForm } from "@/components/team-form";
 import { TeamMemberActions } from "@/components/team-member-actions";
 import { prisma } from "@/lib/prisma";
@@ -55,17 +56,29 @@ export default async function TeamPage() {
         <tbody>
           {rows.map((u) => (
             <tr key={u.id}>
-              <td>{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</td>
+              <td>
+                {canManage ? (
+                  <Link href={`/team/${u.id}`} className="font-medium text-foreground hover:text-accent">
+                    {[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}
+                  </Link>
+                ) : (
+                  [u.firstName, u.lastName].filter(Boolean).join(" ") || "—"
+                )}
+              </td>
               <td>{u.email}</td>
               <td className="capitalize">{u.role === "coordinator" ? "Project coordinator" : u.role}</td>
               <td>
-                <StatusBadge status={u.isActive ? "complete" : "cancelled"} />
-                {!u.isActive && <span className="ml-1 text-xs text-muted-foreground">Inactive</span>}
+                <span className={`badge ${u.isActive ? "badge-success" : "badge-danger"}`}>
+                  {u.isActive ? "Active" : "Removed"}
+                </span>
               </td>
               <td>{u.lastLoginAt ? u.lastLoginAt.toLocaleDateString() : "—"}</td>
               {canManage && (
                 <td className="text-right">
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Link href={`/team/${u.id}`} className="btn-secondary text-xs">
+                      View profile
+                    </Link>
                     <TeamMemberActions
                       userId={u.id}
                       name={displayName(u)}

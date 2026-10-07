@@ -1,5 +1,11 @@
 import { NextRequest } from "next/server";
-import { canEnterProjects, canViewProjectFinancials, clientSchema, isOfficeRole } from "@uln/shared";
+import {
+  DEFAULT_CLIENT_SQFT_RATE,
+  canEnterProjects,
+  canViewProjectFinancials,
+  clientSchema,
+  isOfficeRole,
+} from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { ApiError, handleApiError, jsonError, jsonOk, requireOfficeUser, requireUser } from "@/lib/api";
@@ -33,9 +39,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
+    const canSeeMoney = canViewProjectFinancials(user.role);
 
     const body = await request.json();
+    if (!canSeeMoney && body && typeof body === "object") {
+      body.defaultSqftRate = DEFAULT_CLIENT_SQFT_RATE;
+    }
     const parsed = clientSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
@@ -53,7 +63,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return jsonOk(serializeProject(client), 201);
+    const serialized = serializeProject(client);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized), 201);
   } catch (error) {
     return handleApiError(error);
   }

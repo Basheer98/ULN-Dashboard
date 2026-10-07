@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import { getUser } from "./auth";
+
 export type UserRole = "admin" | "dispatcher" | "accountant" | "fielder";
 
 export type Permission =
@@ -54,6 +57,15 @@ export function hasPermission(role: string | undefined, permission: Permission):
 }
 
 /** Rates, client totals, fielder pay — admin/accountant only (not dispatchers). */
+/** Whether the signed-in user may see rates and money; false until the stored user loads. */
+export function useCanSeeMoney(): boolean {
+  const [canSee, setCanSee] = useState(false);
+  useEffect(() => {
+    getUser().then((user) => setCanSee(canViewProjectFinancials(user?.role)));
+  }, []);
+  return canSee;
+}
+
 export function canViewProjectFinancials(role: string | undefined): boolean {
   return (
     hasPermission(role, "rates:read") ||

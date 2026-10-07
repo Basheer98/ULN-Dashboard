@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout";
 import { MobileNavContext } from "@/components/mobile-nav-context";
 import { RouteGuard } from "@/components/route-guard";
 import { ProjectSearchBar } from "@/components/project-search-bar";
+import { IdleWatcher } from "@/components/idle-watcher";
 
 export { useMobileNav } from "@/components/mobile-nav-context";
 
@@ -62,6 +63,7 @@ export function DashboardShell({
           <RouteGuard role={role}>{children}</RouteGuard>
         </div>
       </div>
+      <IdleWatcher />
     </MobileNavContext.Provider>
   );
 }

@@ -6,7 +6,8 @@ export interface Client {
   contactName: string | null;
   email: string | null;
   phone: string | null;
-  defaultSqftRate: number;
+  /** Omitted for roles that may not see money. */
+  defaultSqftRate?: number;
   billingTerms: string | null;
   notes: string | null;
   isActive: boolean;
@@ -19,7 +20,8 @@ export interface Fielder {
   phone: string | null;
   email: string | null;
   employmentType: string;
-  defaultSqftRate: number;
+  /** Omitted for roles that may not see money. */
+  defaultSqftRate?: number;
   region: string | null;
   isActive: boolean;
   skills: string | null;

@@ -108,7 +108,7 @@ export default function TeamScreen() {
           <Text style={styles.subheading}>Office user accounts</Text>
           <View style={styles.form}>
             <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.mutedForeground} keyboardType="email-address" autoCapitalize="none" />
-            <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+            <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password (10+ chars, letter & number)" placeholderTextColor={colors.mutedForeground} secureTextEntry />
             <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor={colors.mutedForeground} />
             <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor={colors.mutedForeground} />
             <ChipPicker label="Role" options={["admin", "dispatcher", "accountant"] as const} value={role} onChange={setRole} />

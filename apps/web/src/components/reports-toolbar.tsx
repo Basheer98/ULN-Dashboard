@@ -12,7 +12,7 @@ const PRESETS = [
   { value: "custom", label: "Custom" },
 ];
 
-export function ReportsToolbar() {
+export function ReportsToolbar({ canExport }: { canExport: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [preset, setPreset] = useState(searchParams.get("preset") ?? "month");
@@ -32,8 +32,10 @@ export function ReportsToolbar() {
   }
 
   function exportUrl(path: string) {
+    const [base, query] = path.split("?");
     const params = new URLSearchParams(searchParams.toString());
-    return `${path}?${params.toString()}`;
+    new URLSearchParams(query).forEach((value, key) => params.set(key, value));
+    return `${base}?${params.toString()}`;
   }
 
   return (
@@ -70,6 +72,7 @@ export function ReportsToolbar() {
       <button type="button" onClick={applyFilters} className="btn-primary">
         Apply
       </button>
+      {canExport && (
       <div className="flex w-full flex-wrap gap-2 lg:ml-auto lg:w-auto">
         <a href={exportUrl("/api/v1/reports/export")} className="btn-secondary text-sm">
           Export CSV
@@ -87,6 +90,7 @@ export function ReportsToolbar() {
           1099 / W-2 Summary
         </a>
       </div>
+      )}
     </div>
   );
 }

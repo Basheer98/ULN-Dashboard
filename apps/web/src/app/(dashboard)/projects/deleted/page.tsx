@@ -2,7 +2,7 @@ import { Header, StatusBadge } from "@/components/layout";
 import { ProjectRestoreButton } from "@/components/project-restore-button";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { formatCurrency, hasPermission, toNumber } from "@uln/shared";
+import { canViewProjectFinancials, formatCurrency, hasPermission, toNumber } from "@uln/shared";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -11,6 +11,7 @@ export default async function DeletedProjectsPage() {
   if (!user || !hasPermission(user.role, "projects:write")) {
     redirect("/projects");
   }
+  const canSeeMoney = canViewProjectFinancials(user.role);
 
   const projects = await prisma.project.findMany({
     where: { deletedAt: { not: null } },
@@ -61,11 +62,13 @@ export default async function DeletedProjectsPage() {
                     <td>{project.client.name}</td>
                     <td>
                       {toNumber(project.sqft).toLocaleString()}
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(
-                          toNumber(project.sqft) * toNumber(project.clientSqftRate)
-                        )}
-                      </p>
+                      {canSeeMoney && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(
+                            toNumber(project.sqft) * toNumber(project.clientSqftRate)
+                          )}
+                        </p>
+                      )}
                     </td>
                     <td>
                       {project.deletedAt

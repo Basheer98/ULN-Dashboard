@@ -12,6 +12,7 @@ export function FormField({
   multiline,
   keyboardType,
   editable = true,
+  secureTextEntry,
 }: {
   label: string;
   value: string;
@@ -20,6 +21,7 @@ export function FormField({
   multiline?: boolean;
   keyboardType?: "default" | "numeric" | "email-address" | "phone-pad" | "decimal-pad";
   editable?: boolean;
+  secureTextEntry?: boolean;
 }) {
   return (
     <View style={styles.wrap}>
@@ -37,7 +39,9 @@ export function FormField({
         multiline={multiline}
         keyboardType={keyboardType}
         editable={editable}
-        autoCapitalize={keyboardType === "email-address" ? "none" : "sentences"}
+        secureTextEntry={secureTextEntry}
+        autoCorrect={secureTextEntry ? false : undefined}
+        autoCapitalize={keyboardType === "email-address" || secureTextEntry ? "none" : "sentences"}
       />
     </View>
   );

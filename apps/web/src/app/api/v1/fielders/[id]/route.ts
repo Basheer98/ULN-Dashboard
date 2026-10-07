@@ -1,25 +1,29 @@
 import { NextRequest } from "next/server";
-import { fielderSchema } from "@uln/shared";
+import { canViewProjectFinancials, fielderSchema } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser, revokeUserSessions } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
-import { serializeProject } from "@/lib/projects";
+import { serializeProject, stripProjectMoney } from "@/lib/projects";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
     const { id } = await params;
 
     const fielder = await prisma.fielder.findUnique({
       where: { id },
-      include: { user: true, assignments: { include: { project: true } } },
+      include: {
+        user: { select: { id: true, email: true, isActive: true, lastLoginAt: true } },
+        assignments: { include: { project: true } },
+      },
     });
 
     if (!fielder) return jsonError("Fielder not found", 404);
-    return jsonOk(serializeProject(fielder));
+    const serialized = serializeProject(fielder);
+    return jsonOk(canViewProjectFinancials(user.role) ? serialized : stripProjectMoney(serialized));
   } catch (error) {
     return handleApiError(error);
   }
@@ -30,9 +34,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
+    const canSeeMoney = canViewProjectFinancials(user.role);
     const { id } = await params;
     const body = await request.json();
+    if (!canSeeMoney && body && typeof body === "object") delete body.defaultSqftRate;
     const parsed = fielderSchema.partial().safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
@@ -43,7 +49,8 @@ export async function PATCH(
       data: parsed.data,
     });
 
-    return jsonOk(serializeProject(fielder));
+    const serialized = serializeProject(fielder);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized));
   } catch (error) {
     return handleApiError(error);
   }
@@ -61,7 +68,7 @@ export async function DELETE(
     const existing = await prisma.fielder.findUnique({ where: { id } });
     if (!existing) return jsonError("Fielder not found", 404);
     if (!existing.isActive) {
-      return jsonOk(serializeProject(existing));
+      return jsonOk({ id: existing.id, isActive: false });
     }
 
     const fielder = await prisma.fielder.update({
@@ -72,7 +79,7 @@ export async function DELETE(
     const linkedUser = await prisma.user.findUnique({ where: { fielderId: id }, select: { id: true } });
     if (linkedUser) await revokeUserSessions(linkedUser.id);
 
-    return jsonOk(serializeProject(fielder));
+    return jsonOk({ id: fielder.id, isActive: fielder.isActive });
   } catch (error) {
     return handleApiError(error);
   }

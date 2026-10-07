@@ -1,20 +1,25 @@
 import { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
-import { fielderSchema } from "@uln/shared";
+import {
+  DEFAULT_FIELDER_SQFT_RATE,
+  canViewProjectFinancials,
+  fielderSchema,
+  passwordSchema,
+} from "@uln/shared";
 import { prisma, UserRole } from "@uln/database";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
-import { serializeProject } from "@/lib/projects";
+import { serializeProject, stripProjectMoney } from "@/lib/projects";
 import { z } from "zod";
 
 const createFielderSchema = fielderSchema.extend({
   loginEmail: z.string().email().optional(),
-  loginPassword: z.string().min(6).optional(),
+  loginPassword: passwordSchema.optional(),
 });
 
 export async function GET(request: NextRequest) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
 
     const fielders = await prisma.fielder.findMany({
       where: { isActive: true },
@@ -22,7 +27,8 @@ export async function GET(request: NextRequest) {
       include: { user: { select: { email: true } } },
     });
 
-    return jsonOk(serializeProject(fielders));
+    const serialized = serializeProject(fielders);
+    return jsonOk(canViewProjectFinancials(user.role) ? serialized : stripProjectMoney(serialized));
   } catch (error) {
     return handleApiError(error);
   }
@@ -30,9 +36,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireOfficeUser(await getRequestUser(request));
+    const user = requireOfficeUser(await getRequestUser(request));
+    const canSeeMoney = canViewProjectFinancials(user.role);
 
     const body = await request.json();
+    if (!canSeeMoney && body && typeof body === "object") {
+      body.defaultSqftRate = DEFAULT_FIELDER_SQFT_RATE;
+    }
     const parsed = createFielderSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
@@ -71,7 +81,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return jsonOk(serializeProject(fielder), 201);
+    const serialized = serializeProject(fielder);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized), 201);
   } catch (error) {
     return handleApiError(error);
   }

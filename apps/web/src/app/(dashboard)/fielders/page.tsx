@@ -1,6 +1,7 @@
 import { Header, StatusBadge } from "@/components/layout";
 import { prisma } from "@/lib/prisma";
-import { formatRate, toNumber } from "@uln/shared";
+import { canViewProjectFinancials, formatRate, toNumber } from "@uln/shared";
+import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 
 export default async function FieldersPage({
@@ -10,6 +11,8 @@ export default async function FieldersPage({
 }) {
   const params = await searchParams;
   const showInactive = params.inactive === "1";
+  const user = await getSessionUser();
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const fielders = await prisma.fielder.findMany({
     where: { isActive: showInactive ? false : true },
@@ -24,7 +27,7 @@ export default async function FieldersPage({
     <>
       <Header
         title={showInactive ? "Inactive Fielders" : "Fielders"}
-        subtitle="Manage field workforce and SQFT pay rates"
+        subtitle={canSeeMoney ? "Manage field workforce and SQFT pay rates" : "Manage field workforce"}
       />
       <main className="page-main">
         <div className="mb-6 flex flex-wrap justify-end gap-2">
@@ -58,8 +61,8 @@ export default async function FieldersPage({
                     <StatusBadge status={fielder.isActive ? "complete" : "cancelled"} />
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {fielder.employmentType === "w2" ? "W-2" : "1099"} ·{" "}
-                    {formatRate(toNumber(fielder.defaultSqftRate))}/SQFT
+                    {fielder.employmentType === "w2" ? "W-2" : "1099"}
+                    {canSeeMoney && <> · {formatRate(toNumber(fielder.defaultSqftRate))}/SQFT</>}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {fielder.region || "No region"} · {fielder._count.assignments} jobs
@@ -78,7 +81,7 @@ export default async function FieldersPage({
                     <tr>
                       <th>Name</th>
                       <th>Type</th>
-                      <th>Rate / SQFT</th>
+                      {canSeeMoney && <th>Rate / SQFT</th>}
                       <th>Region</th>
                       <th>Jobs</th>
                       <th>Mobile Login</th>
@@ -101,7 +104,7 @@ export default async function FieldersPage({
                             {fielder.employmentType === "w2" ? "W-2" : "1099"}
                           </span>
                         </td>
-                        <td>{formatRate(toNumber(fielder.defaultSqftRate))}</td>
+                        {canSeeMoney && <td>{formatRate(toNumber(fielder.defaultSqftRate))}</td>}
                         <td>{fielder.region || "—"}</td>
                         <td>{fielder._count.assignments}</td>
                         <td>{fielder.user?.email || "—"}</td>

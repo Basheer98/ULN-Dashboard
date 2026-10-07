@@ -11,7 +11,8 @@ interface ClientData {
   contactName: string | null;
   email: string | null;
   phone: string | null;
-  defaultSqftRate: number;
+  /** Omitted for roles that may not see money; the rate field is hidden and left unchanged. */
+  defaultSqftRate?: number;
   billingTerms: string | null;
   notes: string | null;
   isActive: boolean;
@@ -27,7 +28,7 @@ export function ClientEditForm({ client }: { client: ClientData }) {
     contactName: client.contactName ?? "",
     email: client.email ?? "",
     phone: client.phone ?? "",
-    defaultSqftRate: String(client.defaultSqftRate),
+    defaultSqftRate: client.defaultSqftRate != null ? String(client.defaultSqftRate) : "",
     billingTerms: client.billingTerms ?? "",
     notes: client.notes ?? "",
     isActive: client.isActive,
@@ -40,10 +41,11 @@ export function ClientEditForm({ client }: { client: ClientData }) {
     const res = await fetch(`/api/v1/clients/${client.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        defaultSqftRate: Number(form.defaultSqftRate),
-      }),
+      body: JSON.stringify(
+        client.defaultSqftRate != null
+          ? { ...form, defaultSqftRate: Number(form.defaultSqftRate) }
+          : { ...form, defaultSqftRate: undefined }
+      ),
     });
     const data = await res.json();
     setLoading(false);
@@ -102,6 +104,7 @@ export function ClientEditForm({ client }: { client: ClientData }) {
             className="w-full"
           />
         </div>
+        {client.defaultSqftRate != null && (
         <div>
           <label className="label">Default Rate ($/SQFT)</label>
           <input
@@ -116,6 +119,7 @@ export function ClientEditForm({ client }: { client: ClientData }) {
             Current: {formatRate(client.defaultSqftRate)}/SQFT
           </p>
         </div>
+        )}
         <div>
           <label className="label">Billing Terms</label>
           <input

@@ -1,6 +1,7 @@
 import { Header, StatusBadge } from "@/components/layout";
 import { getStateAnalytics } from "@/lib/state-analytics";
-import { formatCurrency, formatRate, toNumber, stateName, US_STATES } from "@uln/shared";
+import { canViewProjectFinancials, formatCurrency, formatRate, hasPermission, toNumber, US_STATES } from "@uln/shared";
+import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -14,16 +15,22 @@ export default async function StateDetailPage({
   if (!US_STATES.some((s) => s.code === stateCode)) notFound();
 
   const analytics = await getStateAnalytics(stateCode);
+  const user = await getSessionUser();
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
+  const canManageRates = user ? hasPermission(user.role, "rates:read") : false;
 
-  const stats = [
+  const opsStats = [
     { label: "Projects", value: analytics.projectCount.toLocaleString() },
     { label: "Active", value: analytics.activeProjects.toLocaleString() },
     { label: "Total SQFT", value: analytics.totalSqft.toLocaleString() },
     { label: "Completed SQFT", value: analytics.completedSqft.toLocaleString() },
+  ];
+  const moneyStats = [
     { label: "Est. Revenue", value: formatCurrency(analytics.totalRevenue) },
     { label: "Fielder Payout", value: formatCurrency(analytics.totalPayout) },
     { label: "Est. Margin", value: formatCurrency(analytics.margin) },
   ];
+  const stats = canSeeMoney ? [...opsStats, ...moneyStats] : opsStats;
 
   return (
     <>
@@ -37,7 +44,7 @@ export default async function StateDetailPage({
           <Link href={`/projects?state=${stateCode}`} className="link">
             View all {stateCode} projects
           </Link>
-          <Link href="/rates" className="link">Manage state rates</Link>
+          {canManageRates && <Link href="/rates" className="link">Manage state rates</Link>}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -60,8 +67,8 @@ export default async function StateDetailPage({
                   <th>Project</th>
                   <th>Client</th>
                   <th>SQFT</th>
-                  <th>Rate</th>
-                  <th>Client Bill</th>
+                  {canSeeMoney && <th>Rate</th>}
+                  {canSeeMoney && <th>Client Bill</th>}
                   <th>Status</th>
                 </tr>
               </thead>
@@ -78,8 +85,8 @@ export default async function StateDetailPage({
                       </td>
                       <td>{p.client.name}</td>
                       <td>{toNumber(p.sqft).toLocaleString()}</td>
-                      <td>{formatRate(toNumber(p.clientSqftRate))}</td>
-                      <td>{formatCurrency(bill)}</td>
+                      {canSeeMoney && <td>{formatRate(toNumber(p.clientSqftRate))}</td>}
+                      {canSeeMoney && <td>{formatCurrency(bill)}</td>}
                       <td><StatusBadge status={p.status} /></td>
                     </tr>
                   );

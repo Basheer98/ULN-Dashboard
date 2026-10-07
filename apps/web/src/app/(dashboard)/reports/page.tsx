@@ -13,7 +13,8 @@ import {
   TopFieldersChart,
 } from "@/components/charts";
 import { getDashboardAnalytics } from "@/lib/analytics";
-import { parseDateRangeParams, formatCurrency, stateName } from "@uln/shared";
+import { canViewProjectFinancials, hasPermission, parseDateRangeParams, formatCurrency, stateName } from "@uln/shared";
+import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 
 export default async function ReportsPage({
@@ -29,12 +30,20 @@ export default async function ReportsPage({
   const range = parseDateRangeParams(sp);
   const analytics = await getDashboardAnalytics(range, { state: params.state });
   const { totals } = analytics;
+  const user = await getSessionUser();
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
+  const canExport = user ? hasPermission(user.role, "reports:export") : false;
+  const sqftByState: { code: string; name: string; sqft: number; revenue?: number }[] = canSeeMoney
+    ? analytics.sqftByState
+    : analytics.sqftByState.map(({ code, name, sqft }) => ({ code, name, sqft }));
 
-  const stats = [
+  const opsStats = [
     { label: "Total Projects", value: totals.projectCount.toLocaleString() },
     { label: "Total SQFT", value: totals.totalSqft.toLocaleString() },
     { label: "SQFT Completed", value: totals.completedSqft.toLocaleString() },
     { label: "Fielders Working", value: totals.activeFielders.toLocaleString() },
+  ];
+  const moneyStats = [
     { label: "Est. Revenue", value: formatCurrency(totals.totalRevenue) },
     { label: "Fielder Payout", value: formatCurrency(totals.totalPayout) },
     { label: "Est. Margin", value: formatCurrency(totals.margin) },
@@ -43,13 +52,14 @@ export default async function ReportsPage({
       value: totals.totalRevenue > 0 ? `${Math.round((totals.margin / totals.totalRevenue) * 100)}%` : "—",
     },
   ];
+  const stats = canSeeMoney ? [...opsStats, ...moneyStats] : opsStats;
 
   return (
     <>
       <Header title="Reports" subtitle={params.state ? `Filtered to ${stateName(params.state)}` : "Business analytics and performance"} />
       <main className="page-main space-y-6">
         <Suspense fallback={<div className="card h-16 animate-pulse" />}>
-          <ReportsToolbar />
+          <ReportsToolbar canExport={canExport} />
         </Suspense>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -61,9 +71,11 @@ export default async function ReportsPage({
           ))}
         </div>
 
-        <ChartCard title="Revenue vs Fielder Pay vs Margin" subtitle="Selected date range">
-          <FinanceBarChart data={analytics.financeByMonth} />
-        </ChartCard>
+        {canSeeMoney && (
+          <ChartCard title="Revenue vs Fielder Pay vs Margin" subtitle="Selected date range">
+            <FinanceBarChart data={analytics.financeByMonth} />
+          </ChartCard>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <ChartCard title="SQFT Completed" subtitle="Selected date range">
@@ -87,11 +99,14 @@ export default async function ReportsPage({
           </ChartCard>
         </div>
 
-        <ChartCard title="SQFT & Revenue by State" subtitle="Click a state for full breakdown">
-          <SqftByStateChart data={analytics.sqftByState} />
+        <ChartCard
+          title={canSeeMoney ? "SQFT & Revenue by State" : "SQFT by State"}
+          subtitle="Click a state for full breakdown"
+        >
+          <SqftByStateChart data={sqftByState} />
         </ChartCard>
 
-        {analytics.sqftByState.length > 0 && (
+        {sqftByState.length > 0 && (
           <div className="card overflow-x-auto">
             <h3 className="mb-4 text-sm font-semibold text-foreground">State breakdown</h3>
             <table className="data-table">
@@ -99,16 +114,16 @@ export default async function ReportsPage({
                 <tr>
                   <th>State</th>
                   <th>SQFT</th>
-                  <th>Est. Revenue</th>
+                  {canSeeMoney && <th>Est. Revenue</th>}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {analytics.sqftByState.map((s) => (
+                {sqftByState.map((s) => (
                   <tr key={s.code}>
                     <td>{s.name}</td>
                     <td>{s.sqft.toLocaleString()}</td>
-                    <td>{formatCurrency(s.revenue)}</td>
+                    {canSeeMoney && <td>{formatCurrency(s.revenue ?? 0)}</td>}
                     <td>
                       <Link href={`/reports/states/${s.code}`} className="link text-sm">
                         View details →
@@ -131,7 +146,7 @@ export default async function ReportsPage({
               <p className="text-sm text-muted-foreground">No assignments yet.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="data-table">
+                <table className="data-table min-w-0 md:min-w-0">
                   <thead>
                     <tr>
                       <th>Fielder</th>

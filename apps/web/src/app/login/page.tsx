@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PasswordInput } from "@/components/password-input";
+
+const SIGN_OUT_NOTICES: Record<string, string> = {
+  idle: "You were signed out after 30 minutes of inactivity.",
+  expired: "Your session has ended. Please sign in again.",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,10 +15,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("reason");
+    if (reason && reason in SIGN_OUT_NOTICES) setNotice(SIGN_OUT_NOTICES[reason]);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setNotice("");
     setLoading(true);
 
     try {
@@ -80,6 +92,11 @@ export default function LoginPage() {
             />
           </div>
 
+          {notice && !error && (
+            <p className="rounded-lg bg-surface-elevated px-3 py-2 text-sm text-muted-foreground">
+              {notice}
+            </p>
+          )}
           {error && (
             <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-danger">
               {error}

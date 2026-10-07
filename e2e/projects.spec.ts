@@ -10,7 +10,18 @@ async function selectByLabel(page: Page, labelText: string, optionLabel: string)
   await select.selectOption({ label: optionLabel });
 }
 
+async function fillCustomTitle(page: Page, title: string) {
+  const select = page.locator('label:has-text("Project Title")').locator("..").locator("select");
+  await select.selectOption({ value: "__custom__" });
+  await page.locator('input[name="title"]').fill(title);
+}
+
 test.describe("Project create", () => {
+  test.afterEach(async ({ page }) => {
+    const id = new URL(page.url()).pathname.match(/^\/projects\/([a-z0-9-]+)$/i)?.[1];
+    if (id && id !== "new") await page.request.delete(`/api/v1/projects/${id}`);
+  });
+
   test("creates a project without fielder assignment", async ({ page }) => {
     const projectNumber = uniqueProjectNumber();
     const title = "E2E Test Project";
@@ -20,7 +31,7 @@ test.describe("Project create", () => {
 
     await page.locator('input[name="projectNumber"]').fill(projectNumber);
     await selectByLabel(page, "Client", "Amdocs");
-    await page.locator('input[name="title"]').fill(title);
+    await fillCustomTitle(page, title);
     await page.locator('input[name="siteAddress"]').fill("123 Test St");
     await page.locator('input[name="city"]').fill("Denver");
     await selectByLabel(page, "State", "Colorado");
@@ -30,8 +41,8 @@ test.describe("Project create", () => {
 
     await expect(page).toHaveURL(/\/projects\/[a-z0-9-]+$/i, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: projectNumber })).toBeVisible();
-    await expect(page.getByText(title)).toBeVisible();
-    await expect(page.getByText("Amdocs")).toBeVisible();
+    await expect(page.getByText(title).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByText("Amdocs").filter({ visible: true }).first()).toBeVisible();
   });
 
   test("creates a project and assigns a fielder", async ({ page }) => {
@@ -42,7 +53,7 @@ test.describe("Project create", () => {
 
     await page.locator('input[name="projectNumber"]').fill(projectNumber);
     await selectByLabel(page, "Client", "Amdocs");
-    await page.locator('input[name="title"]').fill(title);
+    await fillCustomTitle(page, title);
     await page.locator('input[name="siteAddress"]').fill("456 Assign Ave");
     await page.locator('input[name="city"]').fill("Denver");
     await selectByLabel(page, "State", "Colorado");

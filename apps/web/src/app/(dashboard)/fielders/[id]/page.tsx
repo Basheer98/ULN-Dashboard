@@ -3,7 +3,7 @@ import { FielderDeleteButton } from "@/components/fielder-delete-button";
 import { FielderEditForm } from "@/components/fielder-edit-form";
 import { prisma } from "@/lib/prisma";
 import { getFielderAnalytics } from "@/lib/analytics";
-import { formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
+import { canViewProjectFinancials, formatCurrency, formatRate, toNumber, hasPermission } from "@uln/shared";
 import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -16,20 +16,28 @@ export default async function FielderDetailPage({
   const { id } = await params;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "fielders:write") : false;
+  const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const fielder = await prisma.fielder.findUnique({
     where: { id },
     include: {
-      user: true,
+      user: { select: { email: true } },
       assignments: {
         orderBy: { assignedAt: "desc" },
         include: { project: { include: { client: true } } },
       },
-      payments: { orderBy: { createdAt: "desc" }, take: 10 },
     },
   });
 
   if (!fielder) notFound();
+
+  const payments = canSeeMoney
+    ? await prisma.fielderPayment.findMany({
+        where: { fielderId: id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      })
+    : [];
 
   const analytics = await getFielderAnalytics(id);
 
@@ -43,9 +51,11 @@ export default async function FielderDetailPage({
       />
       <main className="page-main space-y-6">
         <div className="flex flex-wrap items-start gap-3">
-          <Link href={`/fielders/${id}/statement`} className="btn-primary text-sm">
-            Payment statement
-          </Link>
+          {canSeeMoney && (
+            <Link href={`/fielders/${id}/statement`} className="btn-primary text-sm">
+              Payment statement
+            </Link>
+          )}
           <FielderEditForm
             fielder={{
               id: fielder.id,
@@ -54,7 +64,7 @@ export default async function FielderDetailPage({
               phone: fielder.phone,
               email: fielder.email,
               employmentType: fielder.employmentType,
-              defaultSqftRate: toNumber(fielder.defaultSqftRate),
+              defaultSqftRate: canSeeMoney ? toNumber(fielder.defaultSqftRate) : undefined,
               region: fielder.region,
               isActive: fielder.isActive,
             }}
@@ -67,38 +77,43 @@ export default async function FielderDetailPage({
             />
           )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className={`grid gap-4 ${canSeeMoney ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Total SQFT</p>
             <p className="mt-2 text-2xl font-semibold">{analytics.totalSqft.toLocaleString()}</p>
           </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Est. Total Pay</p>
-            <p className="mt-2 text-2xl font-semibold">{formatCurrency(analytics.totalPay)}</p>
-          </div>
+          {canSeeMoney && (
+            <div className="stat-card">
+              <p className="text-sm text-muted-foreground">Est. Total Pay</p>
+              <p className="mt-2 text-2xl font-semibold">{formatCurrency(analytics.totalPay)}</p>
+            </div>
+          )}
           <div className="stat-card">
             <p className="text-sm text-muted-foreground">Completed Jobs</p>
             <p className="mt-2 text-2xl font-semibold">{analytics.completedJobs}</p>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className={`grid gap-6 ${canSeeMoney ? "lg:grid-cols-2" : ""}`}>
           <div className="card space-y-3">
             <h2 className="font-semibold text-foreground">Details</h2>
             <p className="text-sm"><span className="text-muted-foreground">Type:</span> {fielder.employmentType === "w2" ? "W-2" : "1099"}</p>
-            <p className="text-sm"><span className="text-muted-foreground">Rate:</span> {formatRate(toNumber(fielder.defaultSqftRate))} / SQFT</p>
+            {canSeeMoney && (
+              <p className="text-sm"><span className="text-muted-foreground">Rate:</span> {formatRate(toNumber(fielder.defaultSqftRate))} / SQFT</p>
+            )}
             <p className="text-sm"><span className="text-muted-foreground">Phone:</span> {fielder.phone || "—"}</p>
             <p className="text-sm"><span className="text-muted-foreground">Email:</span> {fielder.email || "—"}</p>
             <p className="text-sm"><span className="text-muted-foreground">Region:</span> {fielder.region || "—"}</p>
             <p className="text-sm"><span className="text-muted-foreground">Mobile login:</span> {fielder.user?.email || "Not set up"}</p>
           </div>
+          {canSeeMoney && (
           <div className="card">
             <h2 className="mb-4 font-semibold text-foreground">Recent Payments</h2>
-            {fielder.payments.length === 0 ? (
+            {payments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No payments yet.</p>
             ) : (
               <ul className="space-y-2 text-sm">
-                {fielder.payments.map((p) => (
+                {payments.map((p) => (
                   <li key={p.id} className="flex justify-between">
                     <span>{formatCurrency(toNumber(p.totalAmount))}</span>
                     <StatusBadge status={p.status} />
@@ -107,6 +122,7 @@ export default async function FielderDetailPage({
               </ul>
             )}
           </div>
+          )}
         </div>
 
         <div className="card">
