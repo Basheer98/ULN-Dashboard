@@ -7,7 +7,7 @@ import { handleApiError, jsonError, jsonOk, requirePermission } from "@/lib/api"
 import { serializeProject } from "@/lib/projects";
 
 const updateSchema = z.object({
-  role: z.enum(["admin", "dispatcher", "accountant"]).optional(),
+  role: z.enum(["admin", "dispatcher", "accountant", "coordinator"]).optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   isActive: z.boolean().optional(),

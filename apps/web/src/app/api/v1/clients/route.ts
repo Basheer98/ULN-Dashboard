@@ -1,21 +1,31 @@
 import { NextRequest } from "next/server";
-import { clientSchema } from "@uln/shared";
+import { canEnterProjects, canViewProjectFinancials, clientSchema, isOfficeRole } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser } from "@/lib/api";
-import { serializeProject } from "@/lib/projects";
+import { ApiError, handleApiError, jsonError, jsonOk, requireOfficeUser, requireUser } from "@/lib/api";
+import { serializeProject, stripProjectMoney } from "@/lib/projects";
 
 export async function GET(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
-    void user;
+    const user = requireUser(await getRequestUser(request));
+
+    if (!isOfficeRole(user.role)) {
+      if (!canEnterProjects(user.role)) throw new ApiError("Forbidden", 403);
+      const options = await prisma.client.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      });
+      return jsonOk(options);
+    }
 
     const clients = await prisma.client.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
     });
 
-    return jsonOk(serializeProject(clients));
+    const serialized = serializeProject(clients);
+    return jsonOk(canViewProjectFinancials(user.role) ? serialized : stripProjectMoney(serialized));
   } catch (error) {
     return handleApiError(error);
   }

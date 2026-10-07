@@ -60,6 +60,11 @@ export async function POST(request: NextRequest) {
       return jsonError("Invalid email or password", 401);
     }
 
+    const isMobile = request.headers.get("x-client") === "mobile";
+    if (isMobile && user.role === "coordinator") {
+      return jsonError("Project coordinator accounts sign in on the web dashboard, not the mobile app.", 403);
+    }
+
     await Promise.all([
       prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
       recordLoginAttempt(email, ipAddress, true),
@@ -72,7 +77,6 @@ export async function POST(request: NextRequest) {
       fielderId: user.fielderId,
     };
 
-    const isMobile = request.headers.get("x-client") === "mobile";
     const token = await createSession(sessionUser, request, isMobile ? "mobile" : "web");
 
     if (isMobile) {

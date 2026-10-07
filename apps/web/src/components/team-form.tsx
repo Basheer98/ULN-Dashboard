@@ -49,6 +49,7 @@ export function TeamUserForm() {
       <input name="password" type="password" required minLength={6} placeholder="Password" className="w-full" />
       <select name="role" required className="w-full">
         <option value="dispatcher">Dispatcher</option>
+        <option value="coordinator">Project Coordinator (project entry only, no finance)</option>
         <option value="accountant">Accountant</option>
         <option value="admin">Admin</option>
       </select>

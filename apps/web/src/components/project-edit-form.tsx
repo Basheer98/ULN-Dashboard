@@ -44,11 +44,19 @@ const STATUSES = [
 export function ProjectEditForm({
   project,
   canSeeMoney = true,
+  allowedStatuses,
 }: {
   project: ProjectEditValues;
   canSeeMoney?: boolean;
+  /** Restricts the status picker; the current status always stays visible. */
+  allowedStatuses?: readonly string[];
 }) {
   const router = useRouter();
+  const statusOptions = allowedStatuses
+    ? STATUSES.filter((s) => allowedStatuses.includes(s) || s === project.status)
+    : STATUSES;
+  const statusLocked =
+    !!allowedStatuses && (project.status === "invoiced" || project.status === "paid");
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientId, setClientId] = useState(project.clientId);
   const [stateCode, setStateCode] = useState(project.state || "");
@@ -213,9 +221,10 @@ export function ProjectEditForm({
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
+            disabled={statusLocked}
             className="w-full capitalize"
           >
-            {STATUSES.map((s) => (
+            {statusOptions.map((s) => (
               <option key={s} value={s}>
                 {s.replace(/_/g, " ")}
               </option>

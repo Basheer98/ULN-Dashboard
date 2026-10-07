@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
-import { canViewProjectFinancials, projectSchema } from "@uln/shared";
+import {
+  canViewProjectFinancials,
+  hasPermission,
+  PROJECT_ENTRY_STATUSES,
+  projectSchema,
+} from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requirePermission, requireProjectEntry } from "@/lib/api";
 import {
   getProjectFinancials,
   projectFieldChanges,
@@ -66,7 +71,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requirePermission(await getRequestUser(request), "projects:read");
     const { id } = await params;
     const canSeeMoney = canViewProjectFinancials(user.role);
 
@@ -98,7 +103,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = requirePermission(await getRequestUser(request), "projects:write");
+    const user = requireProjectEntry(await getRequestUser(request));
+    const canSeeMoney = canViewProjectFinancials(user.role);
     const { id } = await params;
     const existing = await prisma.project.findFirst({
       where: { id, deletedAt: null },
@@ -109,6 +115,15 @@ export async function PATCH(
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
+    }
+
+    const statusChanging =
+      parsed.data.status !== undefined && parsed.data.status !== existing.status;
+    if (statusChanging && !hasPermission(user.role, "projects:write")) {
+      const allowed = PROJECT_ENTRY_STATUSES as readonly string[];
+      if (!allowed.includes(parsed.data.status!) || existing.status === "invoiced" || existing.status === "paid") {
+        return jsonError("You can't change this project to that status", 403);
+      }
     }
 
     if (parsed.data.projectNumber) {
@@ -124,7 +139,7 @@ export async function PATCH(
     }
 
     const data: Record<string, unknown> = { ...parsed.data };
-    if (!canViewProjectFinancials(user.role)) {
+    if (!canSeeMoney) {
       delete data.clientSqftRate;
     }
     if (parsed.data.projectNumber !== undefined) {
@@ -190,7 +205,8 @@ export async function PATCH(
       }
     }
 
-    return jsonOk(serializeProject(project));
+    const serialized = serializeProject(project);
+    return jsonOk(canSeeMoney ? serialized : stripProjectMoney(serialized));
   } catch (error) {
     return handleApiError(error);
   }

@@ -10,7 +10,13 @@ interface Attachment {
   createdAt: string;
 }
 
-export function ProjectAttachments({ projectId }: { projectId: string }) {
+export function ProjectAttachments({
+  projectId,
+  canUpload = true,
+}: {
+  projectId: string;
+  canUpload?: boolean;
+}) {
   const [items, setItems] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -54,16 +60,18 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
             {items.length} file{items.length === 1 ? "" : "s"} from field and office
           </p>
         </div>
-        <label className="btn-secondary cursor-pointer text-sm">
-          {uploading ? "Uploading..." : "Upload Photo"}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={uploading}
-            onChange={handleUpload}
-          />
-        </label>
+        {canUpload && (
+          <label className="btn-secondary cursor-pointer text-sm">
+            {uploading ? "Uploading..." : "Upload Photo"}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={handleUpload}
+            />
+          </label>
+        )}
       </div>
 
       {items.length === 0 ? (

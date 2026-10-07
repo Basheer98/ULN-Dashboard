@@ -11,7 +11,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getDashboardAnalytics } from "@/lib/analytics";
 import { getDashboardData, type BreakEvenProgress, type Trend } from "@/lib/dashboard";
 import { getOverdueItems } from "@/lib/overdue";
-import { formatCurrency, toNumber } from "@uln/shared";
+import { canAccessRoute, formatCurrency, toNumber } from "@uln/shared";
 import Link from "next/link";
 
 function formatNumber(value: number): string {
@@ -196,7 +196,9 @@ export default async function DashboardPage() {
           <section className="card border-danger/30">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-foreground">Overdue & Aging</h2>
-              <Link href="/schedule" className="link text-sm">View schedule</Link>
+              {canAccessRoute(user.role, "/schedule") && (
+                <Link href="/schedule" className="link text-sm">View schedule</Link>
+              )}
             </div>
             <div className="grid gap-4 lg:grid-cols-2">
               {overdueInvoices.length > 0 && (
@@ -232,14 +234,25 @@ export default async function DashboardPage() {
         )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {cards.map((card) => (
-            <Link key={card.label} href={card.href} className="stat-card">
-              <p className="text-sm text-muted-foreground">{card.label}</p>
-              <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
-              {card.trend && <TrendLine trend={card.trend} />}
-              {card.hint && <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>}
-            </Link>
-          ))}
+          {cards.map((card) => {
+            const body = (
+              <>
+                <p className="text-sm text-muted-foreground">{card.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{card.value}</p>
+                {card.trend && <TrendLine trend={card.trend} />}
+                {card.hint && <p className="mt-1 text-xs text-muted-foreground">{card.hint}</p>}
+              </>
+            );
+            return canAccessRoute(user.role, card.href) ? (
+              <Link key={card.label} href={card.href} className="stat-card">
+                {body}
+              </Link>
+            ) : (
+              <div key={card.label} className="stat-card">
+                {body}
+              </div>
+            );
+          })}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">

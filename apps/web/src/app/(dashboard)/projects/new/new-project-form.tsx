@@ -20,7 +20,15 @@ interface FielderOption {
   isActive: boolean;
 }
 
-export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: boolean }) {
+export default function NewProjectPage({
+  canSeeMoney = true,
+  canAssign = true,
+  canAddClient = true,
+}: {
+  canSeeMoney?: boolean;
+  canAssign?: boolean;
+  canAddClient?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClientId = searchParams.get("clientId");
@@ -54,14 +62,16 @@ export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: b
   useEffect(() => {
     Promise.all([
       fetch("/api/v1/clients").then((r) => r.json()),
-      fetch("/api/v1/fielders").then((r) => r.json()),
+      canAssign ? fetch("/api/v1/fielders").then((r) => r.json()) : Promise.resolve([]),
     ]).then(([clientData, fielderData]) => {
-      setClients(clientData);
+      setClients(Array.isArray(clientData) ? clientData : []);
       setFielders(
-        (fielderData as FielderOption[]).filter((f) => f.isActive !== false)
+        (Array.isArray(fielderData) ? (fielderData as FielderOption[]) : []).filter(
+          (f) => f.isActive !== false
+        )
       );
     });
-  }, []);
+  }, [canAssign]);
 
   useEffect(() => {
     if (!canSeeMoney) return;
@@ -176,7 +186,7 @@ export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: b
     <>
       <Header
         title="New Project"
-        subtitle="Create a project and assign fielders"
+        subtitle={canAssign ? "Create a project and assign fielders" : "Create a project"}
         backHref="/projects"
         backLabel="Back to projects"
       />
@@ -201,9 +211,11 @@ export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: b
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Need a new client? <a href="/clients/new" className="link">Add client</a>
-              </p>
+              {canAddClient && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Need a new client? <a href="/clients/new" className="link">Add client</a>
+                </p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <ProjectTitleField name="title" required />
@@ -323,6 +335,7 @@ export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: b
             </div>
           </div>
 
+          {canAssign && (
           <div className="border-t border-border pt-4">
             <h2 className="text-sm font-semibold text-foreground">Assign Fielder</h2>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -387,6 +400,7 @@ export default function NewProjectPage({ canSeeMoney = true }: { canSeeMoney?: b
               )}
             </div>
           </div>
+          )}
 
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex flex-wrap gap-3">

@@ -1,5 +1,11 @@
 import type { UserRole } from "@uln/database";
-import { canViewProjectFinancials, hasPermission, toNumber } from "@uln/shared";
+import {
+  canAccessRoute,
+  canEnterProjects,
+  canViewProjectFinancials,
+  hasPermission,
+  toNumber,
+} from "@uln/shared";
 import { prisma } from "./prisma";
 import { computeProjectFinancials } from "./projects";
 import { currentMonthKey, getOperationsCostReport } from "./operations-cost";
@@ -62,7 +68,7 @@ async function getBreakEvenProgress(now: Date, completedSqft: number, monthProgr
 export async function getDashboardData(role: UserRole, now = new Date()) {
   const canSeeMoney = canViewProjectFinancials(role);
   const canSeeFinance = hasPermission(role, "finance:read") || hasPermission(role, "finance:admin");
-  const canDispatch = hasPermission(role, "projects:write");
+  const canDispatch = canEnterProjects(role);
   const canSeeInvoices = hasPermission(role, "invoices:read");
   const canSeePayouts = hasPermission(role, "payments:read");
   const canReviewExpenses = hasPermission(role, "finance:write") || hasPermission(role, "finance:admin");
@@ -204,7 +210,12 @@ export async function getDashboardData(role: UserRole, now = new Date()) {
   if (canDispatch) {
     attention.push(
       { key: "unassigned", label: "Projects with no fielder assigned", count: unassignedProjects, href: "/projects?status=draft" },
-      { key: "due-week", label: "Jobs due in the next 7 days", count: dueThisWeek, href: "/schedule" }
+      {
+        key: "due-week",
+        label: "Jobs due in the next 7 days",
+        count: dueThisWeek,
+        href: canAccessRoute(role, "/schedule") ? "/schedule" : "/projects",
+      }
     );
   }
   if (canSeeInvoices) {

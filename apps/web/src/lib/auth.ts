@@ -162,6 +162,4 @@ export async function getRequestUser(request: NextRequest): Promise<SessionUser 
   return null;
 }
 
-export function isOfficeRole(role: UserRole): boolean {
-  return role === "admin" || role === "dispatcher" || role === "accountant";
-}
+export { isOfficeRole } from "@uln/shared";

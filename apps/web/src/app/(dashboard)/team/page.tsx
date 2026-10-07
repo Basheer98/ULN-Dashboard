@@ -22,7 +22,7 @@ export default async function TeamPage() {
 
   return (
     <>
-      <Header title="Team" subtitle="Office accounts — admin, dispatcher, accountant" />
+      <Header title="Team" subtitle="Office accounts — admin, dispatcher, accountant, project coordinator" />
       <main className="page-main space-y-6">
         {hasPermission(user.role, "users:write") && <TeamUserForm />}
 
@@ -42,7 +42,7 @@ export default async function TeamPage() {
                 <tr key={u.id}>
                   <td>{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</td>
                   <td>{u.email}</td>
-                  <td className="capitalize">{u.role}</td>
+                  <td className="capitalize">{u.role === "coordinator" ? "Project coordinator" : u.role}</td>
                   <td>
                     <StatusBadge status={u.isActive ? "complete" : "cancelled"} />
                     {!u.isActive && <span className="ml-1 text-xs text-muted-foreground">Inactive</span>}

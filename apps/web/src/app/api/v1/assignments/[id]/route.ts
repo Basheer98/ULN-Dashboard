@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
-import { assignmentStatusSchema } from "@uln/shared";
+import { assignmentStatusSchema, canViewProjectFinancials, hasPermission } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireUser } from "@/lib/api";
-import { serializeProject } from "@/lib/projects";
+import { serializeProject, stripProjectMoney } from "@/lib/projects";
 import {
   notifyOfficeJobAccepted,
   notifyOfficeJobCompleted,
@@ -26,7 +26,7 @@ export async function PATCH(
     if (!assignment) return jsonError("Assignment not found", 404);
 
     const isFielder = user.role === "fielder" && user.fielderId === assignment.fielderId;
-    const isOffice = user.role !== "fielder";
+    const isOffice = hasPermission(user.role, "projects:write");
     if (!isFielder && !isOffice) {
       return jsonError("Forbidden", 403);
     }
@@ -130,7 +130,10 @@ export async function PATCH(
       }
     }
 
-    return jsonOk(serializeProject(updated));
+    const serialized = serializeProject(updated);
+    return jsonOk(
+      isFielder || canViewProjectFinancials(user.role) ? serialized : stripProjectMoney(serialized)
+    );
   } catch (error) {
     return handleApiError(error);
   }

@@ -3,6 +3,9 @@ import type { UserRole } from "@uln/database";
 export type Permission =
   | "projects:read"
   | "projects:write"
+  /** Create projects and edit their details/status only (no assigning, deleting, importing). */
+  | "projects:enter"
+  | "attachments:write"
   | "clients:read"
   | "clients:write"
   | "fielders:read"
@@ -33,7 +36,7 @@ export type Permission =
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   admin: [
-    "projects:read", "projects:write",
+    "projects:read", "projects:write", "attachments:write",
     "clients:read", "clients:write",
     "fielders:read", "fielders:write",
     "invoices:read", "invoices:write",
@@ -46,14 +49,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "finance:export", "finance:reconcile", "finance:settings",
   ],
   dispatcher: [
-    "projects:read", "projects:write",
+    "projects:read", "projects:write", "attachments:write",
     "clients:read", "clients:write",
     "fielders:read", "fielders:write",
     "schedule:read", "schedule:write",
     "reports:read",
   ],
   accountant: [
-    "projects:read",
+    "projects:read", "attachments:write",
     "clients:read",
     "fielders:read",
     "invoices:read", "invoices:write",
@@ -66,7 +69,20 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "expense:self:create", "expense:self:read",
     "mileage:self:create", "receipt:self:upload",
   ],
+  coordinator: ["projects:read", "projects:enter"],
 };
+
+/** Statuses a project-entry user may set; invoiced/paid belong to finance. */
+export const PROJECT_ENTRY_STATUSES = ["draft", "in_progress", "complete", "cancelled"] as const;
+
+export function canEnterProjects(role: UserRole): boolean {
+  return hasPermission(role, "projects:write") || hasPermission(role, "projects:enter");
+}
+
+/** Admin, dispatcher and accountant: the roles that run the office side of the business. */
+export function isOfficeRole(role: UserRole): boolean {
+  return role === "admin" || role === "dispatcher" || role === "accountant";
+}
 
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
@@ -105,6 +121,10 @@ export function canAccessRoute(role: UserRole, path: string): boolean {
     }
     return hasPermission(role, "finance:read") || hasPermission(role, "finance:admin");
   }
+  if (path.startsWith("/projects/deleted") || path.startsWith("/projects/import")) {
+    return hasPermission(role, "projects:write");
+  }
+  if (path.startsWith("/projects/new")) return canEnterProjects(role);
   if (path.startsWith("/projects")) return hasPermission(role, "projects:read");
   if (path.startsWith("/clients")) return hasPermission(role, "clients:read");
   if (path.startsWith("/fielders")) return hasPermission(role, "fielders:read");
@@ -128,6 +148,7 @@ export const NAV_BY_ROLE: Record<UserRole, string[]> = {
     "/invoices", "/payments", "/finance", "/reports", "/rates",
   ],
   fielder: [],
+  coordinator: ["/dashboard", "/projects"],
 };
 
 export const FINANCE_NAV = [

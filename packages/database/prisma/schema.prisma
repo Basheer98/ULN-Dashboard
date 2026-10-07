@@ -12,6 +12,7 @@ enum UserRole {
   dispatcher
   accountant
   fielder
+  coordinator
 }
 
 enum EmploymentType {

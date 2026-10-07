@@ -183,6 +183,7 @@ export async function ensureProductionSchema(): Promise<{ ok: boolean; steps: st
 
     // Enums — best-effort (PG 15+ IF NOT EXISTS)
     for (const [label, sql] of [
+      ["enum.UserRole.coordinator", `ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'coordinator'`],
       ["enum.PaymentStatus.partial", `ALTER TYPE "PaymentStatus" ADD VALUE IF NOT EXISTS 'partial'`],
       ["enum.NotificationType.payment_pending", `ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'payment_pending'`],
       ["enum.NotificationType.payment_approved", `ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'payment_approved'`],

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getRequestUser, isOfficeRole } from "@/lib/auth";
+import { hasPermission } from "@uln/shared";
+import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk, requireUser } from "@/lib/api";
 import {
   buildProjectSearchWhere,
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (!isOfficeRole(user.role)) {
+    if (!hasPermission(user.role, "projects:read")) {
       return jsonError("Forbidden", 403);
     }
 

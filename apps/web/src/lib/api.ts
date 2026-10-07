@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SessionUser } from "./auth";
-import { hasPermission, type Permission } from "@uln/shared";
+import { canEnterProjects, hasPermission, isOfficeRole, type Permission } from "@uln/shared";
 
 export function jsonOk<T>(data: T, status = 200) {
   return NextResponse.json(data, { status });
@@ -17,9 +17,10 @@ export function requireUser(user: SessionUser | null): SessionUser {
   return user;
 }
 
+/** Admin, dispatcher or accountant. Fielders and project coordinators are rejected. */
 export function requireOfficeUser(user: SessionUser | null): SessionUser {
   const session = requireUser(user);
-  if (session.role === "fielder") {
+  if (!isOfficeRole(session.role)) {
     throw new ApiError("Forbidden", 403);
   }
   return session;
@@ -28,6 +29,15 @@ export function requireOfficeUser(user: SessionUser | null): SessionUser {
 export function requirePermission(user: SessionUser | null, permission: Permission): SessionUser {
   const session = requireUser(user);
   if (!hasPermission(session.role, permission)) {
+    throw new ApiError("Forbidden", 403);
+  }
+  return session;
+}
+
+/** Full project managers (projects:write) or project-entry users (projects:enter). */
+export function requireProjectEntry(user: SessionUser | null): SessionUser {
+  const session = requireUser(user);
+  if (!canEnterProjects(session.role)) {
     throw new ApiError("Forbidden", 403);
   }
   return session;

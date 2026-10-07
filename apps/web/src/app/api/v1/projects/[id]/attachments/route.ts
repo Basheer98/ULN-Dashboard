@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { hasPermission } from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
 import { handleApiError, jsonError, jsonOk } from "@/lib/api";
@@ -44,6 +45,9 @@ export async function POST(
     });
     if (!project) return jsonError("Project not found", 404);
     await assertCanAccessProjectFiles(user, projectId);
+    if (user.role !== "fielder" && !hasPermission(user.role, "attachments:write")) {
+      return jsonError("Forbidden", 403);
+    }
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

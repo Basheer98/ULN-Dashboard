@@ -9,7 +9,14 @@ import { prisma } from "@/lib/prisma";
 import { getProjectFinancials, serializeProject } from "@/lib/projects";
 import { getEntityActivity } from "@/lib/activity-log";
 import { getSessionUser } from "@/lib/auth";
-import { formatCurrency, hasPermission, canViewProjectFinancials, toNumber } from "@uln/shared";
+import {
+  formatCurrency,
+  hasPermission,
+  canEnterProjects,
+  canViewProjectFinancials,
+  PROJECT_ENTRY_STATUSES,
+  toNumber,
+} from "@uln/shared";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -21,7 +28,9 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "projects:write") : false;
+  const canEnter = user ? canEnterProjects(user.role) : false;
   const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
+  const canUpload = user ? hasPermission(user.role, "attachments:write") : false;
 
   const project = await prisma.project.findFirst({
     where: { id, deletedAt: null },
@@ -36,10 +45,12 @@ export default async function ProjectDetailPage({
 
   const [financials, fielders, activities] = await Promise.all([
     canSeeMoney ? getProjectFinancials(id) : Promise.resolve(null),
-    prisma.fielder.findMany({
-      where: { isActive: true },
-      orderBy: { lastName: "asc" },
-    }),
+    canWrite
+      ? prisma.fielder.findMany({
+          where: { isActive: true },
+          orderBy: { lastName: "asc" },
+        })
+      : Promise.resolve([]),
     getEntityActivity("project", id),
   ]);
 
@@ -90,15 +101,17 @@ export default async function ProjectDetailPage({
               <GeneratePaymentsButton projectId={project.id} />
             </>
           )}
-          {canWrite && (
+          {canEnter && (
             <div className="ml-auto flex flex-wrap items-center gap-2">
               <Link href="/projects/new" className="btn-secondary text-sm">
                 New project
               </Link>
-              <ProjectDeleteButton
-                projectId={project.id}
-                projectNumber={project.projectNumber}
-              />
+              {canWrite && (
+                <ProjectDeleteButton
+                  projectId={project.id}
+                  projectNumber={project.projectNumber}
+                />
+              )}
             </div>
           )}
         </div>
@@ -177,9 +190,10 @@ export default async function ProjectDetailPage({
           ) : null}
         </div>
 
-        {canWrite && (
+        {canEnter && (
           <ProjectEditForm
             canSeeMoney={canSeeMoney}
+            allowedStatuses={canWrite ? undefined : PROJECT_ENTRY_STATUSES}
             project={{
               id: project.id,
               projectNumber: project.projectNumber,
@@ -195,7 +209,7 @@ export default async function ProjectDetailPage({
               sqft: toNumber(project.sqft),
               buriedSqft: project.buriedSqft != null ? toNumber(project.buriedSqft) : null,
               aerialSqft: project.aerialSqft != null ? toNumber(project.aerialSqft) : null,
-              clientSqftRate: toNumber(project.clientSqftRate),
+              clientSqftRate: canSeeMoney ? toNumber(project.clientSqftRate) : 0,
               status: project.status,
               dueDate: dueDateValue,
               notes: project.notes,
@@ -214,6 +228,24 @@ export default async function ProjectDetailPage({
               defaultSqftRate: canSeeMoney ? toNumber(f.defaultSqftRate) : 0,
             }))}
           />
+        ) : canEnter ? (
+          <div className="card">
+            <h2 className="mb-2 font-semibold text-foreground">Assigned Fielders</h2>
+            {project.assignments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No fielder assigned yet.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {project.assignments.map((a) => (
+                  <li key={a.id} className="flex justify-between gap-3">
+                    <span>
+                      {a.fielder.firstName} {a.fielder.lastName}
+                    </span>
+                    <span className="capitalize text-muted-foreground">{a.status.replace(/_/g, " ")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : (
           <div className="card">
             <p className="text-sm text-muted-foreground">
@@ -224,7 +256,7 @@ export default async function ProjectDetailPage({
 
         <ProjectActivityTimeline activities={activities} />
 
-        <ProjectAttachments projectId={project.id} />
+        <ProjectAttachments projectId={project.id} canUpload={canUpload} />
       </main>
     </>
   );

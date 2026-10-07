@@ -2,7 +2,13 @@ import { Header } from "@/components/layout";
 import { ProjectsFilter } from "@/components/projects-filter";
 import { ProjectsTable, type ProjectRow } from "@/components/projects-table";
 import { prisma } from "@/lib/prisma";
-import { toNumber, stateName, hasPermission, canViewProjectFinancials } from "@uln/shared";
+import {
+  toNumber,
+  stateName,
+  hasPermission,
+  canEnterProjects,
+  canViewProjectFinancials,
+} from "@uln/shared";
 import type { Prisma, ProjectStatus } from "@uln/database";
 import Link from "next/link";
 import { buildProjectSearchWhere } from "@/lib/project-search";
@@ -32,6 +38,7 @@ export default async function ProjectsPage({
   const params = await searchParams;
   const user = await getSessionUser();
   const canWrite = user ? hasPermission(user.role, "projects:write") : false;
+  const canEnter = user ? canEnterProjects(user.role) : false;
   const canSeeMoney = user ? canViewProjectFinancials(user.role) : false;
 
   const where: Prisma.ProjectWhereInput = { deletedAt: null };
@@ -102,14 +109,18 @@ export default async function ProjectsPage({
       <main className="page-main space-y-6">
         <div className="page-toolbar">
           <ProjectsFilter />
-          {canWrite && (
+          {canEnter && (
             <div className="page-toolbar-actions">
-              <Link href="/projects/deleted" className="btn-secondary">
-                Deleted
-              </Link>
-              <Link href="/projects/import" className="btn-secondary">
-                Import from Sheet
-              </Link>
+              {canWrite && (
+                <>
+                  <Link href="/projects/deleted" className="btn-secondary">
+                    Deleted
+                  </Link>
+                  <Link href="/projects/import" className="btn-secondary">
+                    Import from Sheet
+                  </Link>
+                </>
+              )}
               <Link href="/projects/new" className="btn-primary">
                 New Project
               </Link>

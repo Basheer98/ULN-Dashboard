@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
-import { canViewProjectFinancials, projectCreateSchema } from "@uln/shared";
+import {
+  canViewProjectFinancials,
+  hasPermission,
+  PROJECT_ENTRY_STATUSES,
+  projectCreateSchema,
+} from "@uln/shared";
 import { prisma } from "@/lib/prisma";
 import { getRequestUser } from "@/lib/auth";
-import { handleApiError, jsonError, jsonOk, requireOfficeUser, requirePermission } from "@/lib/api";
+import { handleApiError, jsonError, jsonOk, requirePermission, requireProjectEntry } from "@/lib/api";
 import { assignFielderToProject } from "@/lib/assignments";
 import { activeProjectWhere, serializeProject, stripProjectMoney } from "@/lib/projects";
 import { logActivity } from "@/lib/activity-log";
@@ -10,7 +15,7 @@ import { resolveFielderRateForAssignment, resolveRatesForProject } from "@/lib/r
 
 export async function GET(request: NextRequest) {
   try {
-    const user = requireOfficeUser(await getRequestUser(request));
+    const user = requirePermission(await getRequestUser(request), "projects:read");
 
     const projects = await prisma.project.findMany({
       where: activeProjectWhere,
@@ -34,13 +39,23 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = requirePermission(await getRequestUser(request), "projects:write");
+    const user = requireProjectEntry(await getRequestUser(request));
     const canSeeMoney = canViewProjectFinancials(user.role);
+    const canManage = hasPermission(user.role, "projects:write");
 
     const body = await request.json();
     const parsed = projectCreateSchema.safeParse(body);
     if (!parsed.success) {
       return jsonError(parsed.error.errors[0]?.message || "Invalid input", 400);
+    }
+    if (!canManage) {
+      if (parsed.data.assignment) {
+        return jsonError("You don't have permission to assign fielders", 403);
+      }
+      const status = parsed.data.status;
+      if (status && !(PROJECT_ENTRY_STATUSES as readonly string[]).includes(status)) {
+        return jsonError("You can't set that status", 403);
+      }
     }
 
     const projectNumber = parsed.data.projectNumber.trim();

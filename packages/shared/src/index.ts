@@ -80,7 +80,7 @@ export const projectCreateSchema = projectSchema.extend({
 export const userSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6).optional(),
-  role: z.enum(["admin", "dispatcher", "accountant"]),
+  role: z.enum(["admin", "dispatcher", "accountant", "coordinator"]),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   isActive: z.boolean().optional(),
